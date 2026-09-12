@@ -11,8 +11,12 @@ var muted := false
 var preparing := false
 var requested_voice := ""
 var last_error := ""
+var voice_port := 11436
 
 func _ready() -> void:
+	var configured_port := OS.get_environment("AURORA_VOICE_PORT")
+	if configured_port.is_valid_int() and int(configured_port) >= 1024 and int(configured_port) <= 65535:
+		voice_port = int(configured_port)
 	add_child(player)
 	player.volume_db = -2
 	request = HTTPRequest.new()
@@ -25,7 +29,7 @@ func prepare(text: String, voice := "cadu") -> void:
 	preparing = true
 	requested_voice = voice
 	last_error = ""
-	var error := request.request("http://127.0.0.1:11436/synthesize", PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST, JSON.stringify({"text": text, "voice": voice}))
+	var error := request.request("http://127.0.0.1:%d/synthesize" % voice_port, PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST, JSON.stringify({"text": text, "voice": voice}))
 	if error != OK:
 		preparing = false
 		last_error = "Falha ao iniciar voz %s: %s" % [voice, error]

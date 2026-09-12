@@ -1,4 +1,5 @@
 """Local Cadu CPU service; waveform envelope accompanies each WAV for lip sync."""
+import argparse
 import base64
 import io
 import json
@@ -107,5 +108,11 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(500, {'error':'synthesis failed'})
 
 if __name__ == '__main__':
-    print('Cadu ready on http://127.0.0.1:11436', flush=True)
-    HTTPServer(('127.0.0.1',11436),Handler).serve_forever()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--port', type=int, default=11436)
+    args = parser.parse_args()
+    if not 1024 <= args.port <= 65535:
+        parser.error('port must be between 1024 and 65535')
+    server = HTTPServer(('127.0.0.1', args.port), Handler)
+    print(f'Aurora voice ready on http://127.0.0.1:{args.port}', flush=True)
+    server.serve_forever()
