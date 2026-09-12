@@ -118,7 +118,7 @@ func _ready() -> void:
 	viewport.add_child(fill)
 	host = Node3D.new()
 	host.set_script(load("res://reporter.gd"))
-	host.position = Vector3(-0.65, 1.67, 0)
+	host.position = Vector3(-0.65, 1.67, 3.0)
 	host.scale = Vector3.ONE * 1.15
 	viewport.add_child(host)
 	var picture := TextureRect.new()
