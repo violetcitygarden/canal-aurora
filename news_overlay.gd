@@ -84,9 +84,8 @@ func preview_reporter(location: int) -> void:
 	Narration.play_story(story)
 
 func _story_ready() -> void:
-	if received_first and not NewsFeed.queue.is_empty() and NewsFeed.queue[0].get("kind", "") == "weather":
-		_next_generated()
-	elif automatic and not received_first:
+	# New audio only makes a story available; it must never interrupt playback.
+	if automatic and not received_first and not Narration.player.playing:
 		_next_generated()
 
 func _next_generated() -> bool:
@@ -103,6 +102,8 @@ func _next_generated() -> bool:
 	return true
 
 func _switch_story(next_index: int) -> void:
+	if NewsFeed.return_to_studio and items[next_index].get("kind", "studio") != "studio":
+		return
 	Narration.stop()
 	pre_read = -1
 	pending_index = next_index
@@ -113,6 +114,7 @@ func _update_handoff(delta: float) -> void:
 		if ident.active:
 			return
 		index = pending_index
+		NewsFeed.story_aired(items[index])
 		weather_panel.set_story(items[index])
 		reporter_panel.set_story(items[index])
 		if weather_panel.visible and not weather_audio.playing:
@@ -141,6 +143,7 @@ func reload_news() -> void:
 			if item is Dictionary and item.get("manchete") is String and item.get("texto") is String:
 				valid.append(item)
 		if not valid.is_empty():
+			NewsFeed.reserved_kind = ""
 			pending_index = -1
 			pre_read = -1
 			awkward = false

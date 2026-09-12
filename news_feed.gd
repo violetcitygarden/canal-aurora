@@ -11,6 +11,11 @@ var retry_at := 0
 var failures := 0
 var enabled := true
 var serial := 0
+var studio_since_reporter := 0
+var news_since_weather := 0
+var return_to_studio := false
+var aired: Dictionary = {}
+var reserved_kind := ""
 var reporter_requested := false
 var reporter_location := 0
 var weather_requested := false
@@ -36,38 +41,74 @@ func _ready() -> void:
 	weather_requested = "--test-weather" in OS.get_cmdline_user_args() or "--start-weather" in OS.get_cmdline_user_args()
 	next_weather_at = randi_range(12, 22)
 
+func has_kind(kind: String) -> bool:
+	if reserved_kind == kind:
+		return true
+	if not phase.is_empty() and draft.get("kind", "studio") == kind:
+		return true
+	for story in queue:
+		if story.get("kind", "studio") == kind:
+			return true
+	return false
+
 func request_reporter() -> void:
 	reporter_requested = true
-	status = "Reportagem externa solicitada"
+	status = "Reportagem solicitada para uma próxima troca"
 
 func request_weather() -> void:
-	# Keep the request pending if a news or speech job is already running.
-	if not phase.is_empty() and draft.get("kind", "") == "weather":
-		return
-	for i in range(queue.size()):
-		if queue[i].get("kind", "") == "weather":
-			var ready_weather: Dictionary = queue[i]
-			queue.remove_at(i)
-			queue.push_front(ready_weather)
-			status = "Previsão pronta para a próxima troca"
-			return
 	weather_requested = true
-	status = "Previsão solicitada; preparando próximo quadro"
+	status = "Previsão solicitada para uma próxima troca"
+
+func desired_kind() -> String:
+	if return_to_studio:
+		return "studio"
+	if weather_requested or news_since_weather >= next_weather_at:
+		return "weather"
+	if reporter_requested or studio_since_reporter >= 5:
+		return "reporter"
+	return "studio"
+
+func story_aired(story: Dictionary) -> void:
+	reserved_kind = ""
+	var kind: String = story.get("kind", "studio")
+	return_to_studio = kind == "reporter"
+	# Count a generated item once, only when its scene reaches the screen.
+	var id := int(story.get("broadcast_id", -1))
+	if id < 0 or aired.has(id):
+		return
+	aired[id] = true
+	if kind == "weather":
+		weather_requested = false
+		news_since_weather = 0
+		next_weather_at = randi_range(12, 22)
+	else:
+		news_since_weather += 1
+		if kind == "reporter":
+			reporter_requested = false
+			studio_since_reporter = 0
+			reporter_location = (int(story.get("location", 0)) + 1) % 3
+		else:
+			studio_since_reporter += 1
 
 func _process(_delta: float) -> void:
-	if enabled and phase.is_empty() and (queue.size() < 2 or weather_requested or reporter_requested) and Time.get_ticks_msec() >= retry_at:
+	if enabled and phase.is_empty() and Time.get_ticks_msec() >= retry_at:
 		generate()
 
 func generate() -> void:
-	if not enabled or not phase.is_empty() or (queue.size() >= 2 and not weather_requested and not reporter_requested):
+	if not enabled or not phase.is_empty():
 		return
-	if weather_requested or serial >= next_weather_at:
-		var priority_weather := weather_requested
-		weather_requested = false
-		serial += 1
-		next_weather_at = serial + randi_range(12, 22)
+	var kind := desired_kind()
+	# A due segment may exceed the two-item lookahead, but is never duplicated.
+	if has_kind(kind):
+		if queue.size() >= 2:
+			return
+		kind = "studio"
+	elif kind == "studio" and queue.size() >= 2 and not return_to_studio:
+		return
+	serial += 1
+	if kind == "weather":
 		draft = preload("res://weather_segment.gd").create()
-		draft["priority"] = priority_weather
+		draft["broadcast_id"] = serial
 		draft["model"] = config.model
 		phase = "weather_body"
 		status = "BRD está escrevendo a previsão da Helena"
@@ -75,14 +116,10 @@ func generate() -> void:
 		return
 	var topic: String = TOPICS.pick_random()
 	var anomaly: String = ANOMALIES.pick_random()
-	serial += 1
-	draft = {"editoria": "SANTA IRENE", "model": config.model, "pauta": topic, "anomalia": anomaly}
-	if reporter_requested or serial % 5 == 0:
-		reporter_requested = false
-		draft["kind"] = "reporter"
+	draft = {"kind": kind, "broadcast_id": serial, "editoria": "SANTA IRENE", "model": config.model, "pauta": topic, "anomalia": anomaly}
+	if kind == "reporter":
 		draft["location"] = reporter_location
 		draft["editoria"] = ["AO VIVO • CENTRO", "AO VIVO • CAMPO", "AO VIVO • MIRANTE"][reporter_location]
-		reporter_location = (reporter_location + 1) % 3
 	phase = "headline"
 	status = "Escrevendo manchete"
 	var prompt := "Pauta: %s. Acontecimento: %s. Invente os detalhes e escreva uma única manchete com até 12 palavras, tratando isso como rotina municipal. Apenas a manchete, sem introdução, aspas ou lista." % [topic, anomaly]
@@ -125,7 +162,7 @@ func _completed(result: int, code: int, _headers: PackedStringArray, body: Packe
 		draft["done_reason"] = response.get("done_reason", "")
 		phase = "voice"
 		var is_weather: bool = draft.get("kind", "") == "weather"
-		status = "Thalita está preparando a previsão" if is_weather else "Cadu está preparando a leitura"
+		status = "Thalita está preparando a previsão" if is_weather else ("Jeff está preparando a reportagem" if draft.get("kind") == "reporter" else "Cadu está preparando a leitura")
 		var spoken_text := value
 		if not is_weather:
 			var headline: String = str(draft.manchete).strip_edges()
@@ -143,10 +180,7 @@ func _voice_ready(payload: Dictionary) -> void:
 	archive["audio_seconds"] = payload.get("audio_seconds", 0)
 	_archive(archive)
 	draft.merge(payload)
-	if draft.get("priority", false):
-		queue.push_front(draft.duplicate(true))
-	else:
-		queue.append(draft.duplicate(true))
+	queue.append(draft.duplicate(true))
 	phase = ""
 	failures = 0
 	status = "Quadro pronto com " + str(payload.get("voice", "voz indisponível"))
@@ -156,15 +190,17 @@ func _voice_ready(payload: Dictionary) -> void:
 		enabled = false
 
 func take() -> Dictionary:
-	if queue.is_empty():
-		return {}
-	return queue.pop_front()
+	var kind := desired_kind()
+	for i in range(queue.size()):
+		if queue[i].get("kind", "studio") == kind:
+			var story: Dictionary = queue[i]
+			queue.remove_at(i)
+			reserved_kind = kind
+			return story
+	# Hold the current scene while its required successor is being prepared.
+	return {}
 
 func _fail(message: String) -> void:
-	if draft.get("kind", "") == "reporter":
-		reporter_requested = true
-	if draft.get("kind", "") == "weather":
-		weather_requested = true
 	phase = ""
 	failures += 1
 	retry_at = Time.get_ticks_msec() + mini(120, 10 * failures) * 1000
