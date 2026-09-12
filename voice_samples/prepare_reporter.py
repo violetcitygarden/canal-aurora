@@ -1,6 +1,7 @@
 """Prepare real Piper Jeff speech for the standalone reporter preview."""
 import hashlib
 import json
+import sys
 from pathlib import Path
 from generate import download
 
@@ -25,6 +26,8 @@ def main():
         name = 'pt_BR-jeff-medium' + suffix
         print('Conferindo modelo Jeff: ' + name, flush=True)
         download(base + '/' + name, models / name)
+    if "--model-only" in sys.argv:
+        return
     from server import synthesize
     output = ROOT / 'reporter_preview'
     output.mkdir(exist_ok=True)

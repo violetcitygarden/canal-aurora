@@ -9,6 +9,8 @@ var mouth_open := 0.0
 var silence := 0.0
 var muted := false
 var preparing := false
+var requested_voice := ""
+var last_error := ""
 
 func _ready() -> void:
 	add_child(player)
@@ -21,19 +23,26 @@ func _ready() -> void:
 
 func prepare(text: String, voice := "cadu") -> void:
 	preparing = true
+	requested_voice = voice
+	last_error = ""
 	var error := request.request("http://127.0.0.1:11436/synthesize", PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST, JSON.stringify({"text": text, "voice": voice}))
 	if error != OK:
 		preparing = false
+		last_error = "Falha ao iniciar voz %s: %s" % [voice, error]
 		prepared.emit({})
 
 func _completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	preparing = false
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
-		push_warning("Cadu indisponível: notícia exibida sem voz. HTTP %s" % code)
+		last_error = "Voz %s indisponível: resultado %s, HTTP %s" % [requested_voice, result, code]
+		push_warning(last_error)
 		prepared.emit({})
 		return
 	var payload = JSON.parse_string(body.get_string_from_utf8())
-	prepared.emit(decode_payload(payload))
+	var decoded := decode_payload(payload)
+	if decoded.is_empty():
+		last_error = "Áudio inválido recebido para " + requested_voice
+	prepared.emit(decoded)
 
 func decode_payload(payload: Variant) -> Dictionary:
 	if not payload is Dictionary or not payload.get("wav") is String or not payload.get("envelope") is Array:

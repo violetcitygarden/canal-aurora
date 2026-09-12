@@ -91,6 +91,10 @@ func story_aired(story: Dictionary) -> void:
 			studio_since_reporter += 1
 
 func _process(_delta: float) -> void:
+	if enabled and phase == "voice_retry" and Time.get_ticks_msec() >= retry_at:
+		phase = "voice"
+		Narration.prepare(str(draft.texto_narrado), "jeff")
+		return
 	if enabled and phase.is_empty() and Time.get_ticks_msec() >= retry_at:
 		generate()
 
@@ -174,6 +178,13 @@ func _completed(result: int, code: int, _headers: PackedStringArray, body: Packe
 
 func _voice_ready(payload: Dictionary) -> void:
 	if phase != "voice":
+		return
+	if draft.get("kind", "") == "reporter" and (not payload.get("_stream") is AudioStream or payload.get("voice", "") != "jeff"):
+		phase = "voice_retry"
+		failures += 1
+		retry_at = Time.get_ticks_msec() + mini(120, failures * 10) * 1000
+		status = "Jeff falhou; reportagem retida para tentar a voz novamente. " + Narration.last_error
+		push_warning(status)
 		return
 	var archive := draft.duplicate(true)
 	archive["voice"] = payload.get("voice", "unavailable")

@@ -82,7 +82,7 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
     def do_GET(self):
-        self.reply(200 if self.path == '/health' else 404, {'voice':'cadu','voices':['cadu','thalita','maria','jeff'],'backend':'piper-cpu+edge+sapi'})
+        self.reply(200 if self.path == '/health' else 404, {'service':'canal-aurora-voice','version':2,'voice':'cadu','voices':['cadu','thalita','maria','jeff'],'backend':'piper-cpu+edge+sapi'})
 
     def do_POST(self):
         if self.path != '/synthesize':

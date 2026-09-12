@@ -42,7 +42,7 @@ A transmissão começa sem interface de configuração na tela. H revela os cont
 ## Repórter externo — Jeff
 O jornal solicita uma reportagem externa após cinco notícias inéditas de estúdio exibidas. E solicita uma entrada na próxima troca elegível, sempre aguardando a leitura atual. Os ambientes alternam entre rua comercial, campo verde e mirante noturno com prédios iluminados. A localização acompanha o prompt do repórter. F3 alterna apenas o cenário visual durante uma externa. Microfone de mão, paletó azul e boca sincronizada com o áudio.
 
-Jeff usa Piper local na CPU, com carregamento do modelo no primeiro pedido. Coloque `pt_BR-jeff-medium.onnx` e `pt_BR-jeff-medium.onnx.json` em `voice_samples/models/` (os mesmos arquivos das amostras anteriores). O script existente `voice_samples/generate.py` baixa os modelos das amostras, incluindo Jeff, se faltarem. Reinicie o servidor de voz após atualizar o código. Se o modelo não estiver disponível, a reportagem aparece sem áudio; não usa Cadu como substituto.
+Jeff usa Piper local na CPU, com carregamento do modelo no primeiro pedido. Coloque `pt_BR-jeff-medium.onnx` e `pt_BR-jeff-medium.onnx.json` em `voice_samples/models/` (os mesmos arquivos das amostras anteriores). O script existente `voice_samples/generate.py` baixa os modelos das amostras, incluindo Jeff, se faltarem. Reinicie o servidor de voz após atualizar o código. Se a síntese Jeff falhar, a reportagem fica retida fora do ar e a mesma fala é tentada novamente, sem usar Cadu como substituto.
 
 Para testar o repórter, dê dois cliques em `ABRIR-REPORTER.bat`. O lançador usa o ambiente `.venv-voice` já instalado para baixar Jeff se necessário e sintetizar três falas de teste (uma por local). Depois abre diretamente no repórter, com áudio e boca sincronizada. Não precisa do Ollama nem de servidor HTTP para esse teste. F3 troca cenário e fala; E ou espaço repete; V silencia. As falas ficam em cache em `voice_samples/reporter_preview/`.
 
@@ -54,3 +54,8 @@ A chegada de uma matéria pronta não interrompe nenhuma fala. No automático, a
 Depois de toda reportagem externa, a próxima entrada é obrigatoriamente uma notícia no estúdio. Uma previsão solicitada ou já pronta aguarda esse retorno. Se a notícia de estúdio ainda não estiver pronta, mantém a imagem atual até ela ficar disponível. Pedidos E/W são agrupados enquanto pendentes; a previsão tem preferência quando ambos são devidos, exceto no retorno obrigatório ao estúdio.
 
 Falhas de geração, itens apenas na fila e reprises não avançam os intervalos. As contagens são confirmadas quando a cena entra no ar após a vinheta. Teste de regressão sem Ollama/Piper: `godot --headless --path . --script res://tests/broadcast_cycle.gd -- --preview-reporter`.
+
+### Verificação de voz na abertura
+`ABRIR-CANAL.bat` agora confere/baixa o modelo Jeff e testa uma síntese real no servidor HTTP antes de abrir o Godot. Reinicia um servidor antigo somente quando o processo é o Python deste projeto; um processo diferente na porta 11436 gera erro visível. O terminal fica aberto quando a abertura falha.
+
+Reportagens só entram na fila com áudio Jeff válido. Em caso de falha, o texto é preservado e a síntese é repetida com espera de 10 a 120 segundos; H mostra o estado e o erro HTTP identifica a voz solicitada. Teste de integração (com `voice_samples/server.py` rodando): `godot --headless --path . --script res://tests/reporter_http.gd -- --preview-reporter`. Este teste usa o Jeff real via HTTP, verifica a retenção após falha e a reprodução com boca animada; não requer Ollama.
