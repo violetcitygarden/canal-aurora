@@ -158,7 +158,7 @@ func _completed(result: int, code: int, _headers: PackedStringArray, body: Packe
 		var setting := ""
 		if draft.get("kind", "") == "reporter":
 			setting = "Você é um repórter no local: %s. Descreva o que vê e termine devolvendo ao estúdio. " % ["rua comercial de dia", "campo verde de dia", "mirante à noite com a cidade ao fundo"][int(draft.location)]
-		_send.call_deferred(setting + "Manchete: %s\nO fato central que aconteceu de verdade nesta cidade: %s. Escreva esta notícia em aproximadamente 100 palavras. Relate esse fato impossível como rotina, sem transformar em metáfora. Acrescente um prazo preciso, uma consequência banal e uma declaração muito séria de um morador ou funcionário inventado. Apenas o texto que o apresentador vai ler, sem título, sem saudações e sem explicar a piada." % [draft.manchete, draft.anomalia], int(config.get("body_tokens", 350)))
+		_send.call_deferred(setting + "Manchete: %s\nO fato central que aconteceu de verdade nesta cidade: %s. Escreva esta notícia em aproximadamente 100 palavras. Relate esse fato impossível como rotina, sem transformar em metáfora. Acrescente um prazo preciso, uma consequência banal e uma declaração muito séria de um morador ou funcionário inventado. Pode falar de sexo, drogas, corrupção, coisas banais." % [draft.manchete, draft.anomalia], int(config.get("body_tokens", 350)))
 	else:
 		draft["texto"] = value
 		draft["resumo"] = value.replace("\n", " ").split(". ")[0].left(180)
