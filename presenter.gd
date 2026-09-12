@@ -1,6 +1,7 @@
 extends Node3D
 ## Shared low-poly host geometry and narration-driven idle/lip animation.
 var weather_host := false
+var reporter_host := false
 var head: Node3D
 var torso: Node3D
 var eyes: Array[Node3D] = []
@@ -76,6 +77,8 @@ func _ready() -> void:
 	var hair := mat("#6b3827" if weather_host else "#3e302c")
 	var gray := mat("#a89885")
 	var suit := mat("#328b91" if weather_host else "#747973")
+	if reporter_host:
+		suit = mat("#294d64")
 	var lapel := mat("#73bab2" if weather_host else "#9a9e8d")
 	var shirt := mat("#e5d8b7")
 	var tie := mat("#864742")
@@ -98,6 +101,18 @@ func _ready() -> void:
 	block(torso, Vector3(-0.32,0.31,0.29), Vector3(0.13,0.025,0.015), shirt)
 	shape(torso, Vector3(0.29,0.49,0.30), Vector3(0.024,0.042,0.027), mat("#202d35"), 6)
 	for side in [-1,1]:
+		if reporter_host:
+			var elbow := Vector3(side * 0.62, -0.08, 0.08)
+			var wrist := Vector3(0.19, 0.28, 0.58) if side == 1 else Vector3(-0.50, -0.48, 0.16)
+			limb(Vector3(side * 0.48, 0.48, 0), elbow, 0.16, suit)
+			limb(elbow, wrist, 0.12, suit)
+			var hand := shape(torso, wrist, Vector3(0.10, 0.13, 0.10), skin, 8)
+			if side == 1:
+				right_hand = hand
+				block(hand, Vector3(0, 0.14, 0), Vector3(0.06, 0.36, 0.06), mat("#202932"))
+				block(hand, Vector3(0, 0.25, 0), Vector3(0.19, 0.14, 0.15), mat("#d7bc7c"))
+				shape(hand, Vector3(0, 0.39, 0), Vector3(0.11, 0.14, 0.10), mat("#151d24"), 8)
+			continue
 		if weather_host:
 			var elbow := Vector3(side * 0.69, 0.04, 0)
 			var wrist := Vector3(-1.02, 0.29, 0.05) if side == -1 else Vector3(0.48, -0.35, 0.1)
@@ -143,7 +158,7 @@ func _ready() -> void:
 	# Prominent faceted nose, neat moustache and an over-rehearsed closed smile.
 	shape(head,Vector3(0,-0.005,0.326),Vector3(0.085,0.135,0.135),skin,6)
 	for side in [-1,1]:
-		if weather_host:
+		if weather_host or reporter_host:
 			continue
 		var moustache := block(head,Vector3(side*0.075,-0.14,0.303),Vector3(0.15,0.048,0.038),hair)
 		moustache.rotation.z = side*0.10

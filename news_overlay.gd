@@ -22,6 +22,7 @@ var ident: Node2D
 var pending_index := -1
 var pre_read := -1.0
 var awkward := false
+var reporter_panel: Node2D
 var weather_panel: Node2D
 var news_music_on := true
 var news_music_timer := 0.0
@@ -48,6 +49,10 @@ func _ready() -> void:
 	weather_panel.set_script(load("res://weather_panel.gd"))
 	weather_panel.show_behind_parent = true
 	add_child(weather_panel)
+	reporter_panel = Node2D.new()
+	reporter_panel.set_script(load("res://reporter_panel.gd"))
+	reporter_panel.show_behind_parent = true
+	add_child(reporter_panel)
 	ident = Node2D.new()
 	ident.set_script(load("res://transition.gd"))
 	add_child(ident)
@@ -87,6 +92,7 @@ func _update_handoff(delta: float) -> void:
 			return
 		index = pending_index
 		weather_panel.set_story(items[index])
+		reporter_panel.set_story(items[index])
 		if weather_panel.visible and not weather_audio.playing:
 			weather_audio.play()
 		pending_index = -1
@@ -121,6 +127,8 @@ func reload_news() -> void:
 			items = valid
 			if is_instance_valid(weather_panel):
 				weather_panel.set_story({})
+			if is_instance_valid(reporter_panel):
+				reporter_panel.set_story({})
 			index = mini(index, items.size() - 1)
 			entry = 0
 			Narration.stop()
@@ -172,6 +180,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			entry = 0
 			body_scroll = 0
 		KEY_A: automatic = not automatic
+		KEY_E:
+			NewsFeed.request_reporter()
+		KEY_F3:
+			if reporter_panel.visible:
+				reporter_panel.cycle_location()
 		KEY_W:
 			NewsFeed.request_weather()
 		KEY_G:
@@ -300,6 +313,6 @@ func _draw() -> void:
 		text("CONTROLE DO JORNAL", Vector2(98, 205), 24, GOLD)
 		text("A  automático: %s    G  próxima IA    T  ler texto" % ("SIM" if automatic else "NÃO"), Vector2(98, 241), 19)
 		text("← / → manchete   L faixa   R exemplos   H ajuda", Vector2(98, 274), 19)
-		text("W tempo  F2 clássico  F11 tela cheia  M música  V voz", Vector2(98, 307), 17)
+		text("E repórter  F3 cenário  W tempo  M música  V voz", Vector2(98, 307), 17)
 		text(fitted(NewsFeed.status, 17, 600), Vector2(98, 345), 17, GOLD)
 		text("Fila: %d • %s" % [NewsFeed.queue.size(), str(NewsFeed.config.get("model", ""))], Vector2(98, 375), 15)

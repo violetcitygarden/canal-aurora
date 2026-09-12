@@ -15,12 +15,14 @@ from piper import PiperVoice, SynthesisConfig
 
 ROOT = Path(__file__).resolve().parent
 VOICE = PiperVoice.load(str(ROOT / 'models/pt_BR-cadu-medium.onnx'), use_cuda=False)
+JEFF = None
 CONFIG = SynthesisConfig(length_scale=1.08, noise_scale=0.667, noise_w_scale=0.8, normalize_audio=True)
 
 async def thalita_audio(path, text):
     await asyncio.wait_for(edge_tts.Communicate(text, 'pt-BR-ThalitaMultilingualNeural').save(str(path)), timeout=65)
 
 def synthesize(text, voice='cadu'):
+    global JEFF
     start = time.perf_counter()
     buffer = io.BytesIO()
     if voice == 'thalita':
@@ -45,7 +47,12 @@ def synthesize(text, voice='cadu'):
             data = wave_path.read_bytes()
     else:
         with wave.open(buffer, 'wb') as output:
-            VOICE.synthesize_wav(text, output, syn_config=CONFIG)
+            selected = VOICE
+            if voice == 'jeff':
+                if JEFF is None:
+                    JEFF = PiperVoice.load(str(ROOT / 'models/pt_BR-jeff-medium.onnx'), use_cuda=False)
+                selected = JEFF
+            selected.synthesize_wav(text, output, syn_config=CONFIG)
         data = buffer.getvalue()
     with wave.open(io.BytesIO(data), 'rb') as audio:
         rate = audio.getframerate()
@@ -71,7 +78,7 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
     def do_GET(self):
-        self.reply(200 if self.path == '/health' else 404, {'voice':'cadu','voices':['cadu','thalita','maria'],'backend':'piper-cpu+edge+sapi'})
+        self.reply(200 if self.path == '/health' else 404, {'voice':'cadu','voices':['cadu','thalita','maria','jeff'],'backend':'piper-cpu+edge+sapi'})
 
     def do_POST(self):
         if self.path != '/synthesize':
@@ -86,7 +93,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(text,str) or not text.strip() or len(text)>8000:
                 raise ValueError('invalid text')
             voice = payload.get('voice', 'cadu')
-            if voice not in ('cadu', 'thalita', 'maria'):
+            if voice not in ('cadu', 'thalita', 'maria', 'jeff'):
                 raise ValueError('invalid voice')
             self.reply(200, synthesize(text, voice))
         except (ValueError, TypeError, json.JSONDecodeError) as error:

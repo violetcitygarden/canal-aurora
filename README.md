@@ -38,3 +38,10 @@ Edite weather.json para mudar a cidade, as temperaturas, os boletins e o rodapé
 Design e desenho: main.gd. Cena de entrada: main.tscn.
 A fonte usa Arial instalada no sistema, com fallback; nenhuma fonte comercial é redistribuída.
 A transmissão começa sem interface de configuração na tela. H revela os controles.
+
+## Repórter externo — Jeff
+O jornal inclui uma reportagem externa a cada cinco pautas geradas. E solicita uma entrada na fila; ela aguarda a leitura atual e as matérias já prontas. Os ambientes alternam entre rua comercial, campo verde e mirante noturno com prédios iluminados. A localização acompanha o prompt do repórter. F3 alterna apenas o cenário visual durante uma externa. Microfone de mão, paletó azul e boca sincronizada com o áudio.
+
+Jeff usa Piper local na CPU, com carregamento do modelo no primeiro pedido. Coloque `pt_BR-jeff-medium.onnx` e `pt_BR-jeff-medium.onnx.json` em `voice_samples/models/` (os mesmos arquivos das amostras anteriores). O script existente `voice_samples/generate.py` baixa os modelos das amostras, incluindo Jeff, se faltarem. Reinicie o servidor de voz após atualizar o código. Se o modelo não estiver disponível, a reportagem aparece sem áudio; não usa Cadu como substituto.
+
+Para ver os três ambientes sem Ollama ou voz: abra com `godot --path . -- --preview-reporter` e pressione F3. E solicita texto e voz apenas na transmissão normal.

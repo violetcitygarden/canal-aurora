@@ -11,6 +11,8 @@ var retry_at := 0
 var failures := 0
 var enabled := true
 var serial := 0
+var reporter_requested := false
+var reporter_location := 0
 var weather_requested := false
 var next_weather_at := 0
 const TOPICS := ["obras e manutenção de ruas", "horários da biblioteca", "comércio e feira municipal", "previsão do tempo", "transporte entre bairros", "agenda do centro cultural", "abastecimento de água", "assembleia da associação de moradores"]
@@ -24,7 +26,7 @@ func _ready() -> void:
 		enabled = false
 		status = "llm.json inválido"
 		return
-	enabled = not "--capture-news" in OS.get_cmdline_user_args()
+	enabled = not "--capture-news" in OS.get_cmdline_user_args() and not "--preview-reporter" in OS.get_cmdline_user_args()
 	request = HTTPRequest.new()
 	request.timeout = 90
 	request.body_size_limit = 1024 * 1024
@@ -33,6 +35,10 @@ func _ready() -> void:
 	Narration.prepared.connect(_voice_ready)
 	weather_requested = "--test-weather" in OS.get_cmdline_user_args() or "--start-weather" in OS.get_cmdline_user_args()
 	next_weather_at = randi_range(12, 22)
+
+func request_reporter() -> void:
+	reporter_requested = true
+	status = "Reportagem externa solicitada"
 
 func request_weather() -> void:
 	# Keep the request pending if a news or speech job is already running.
@@ -49,11 +55,11 @@ func request_weather() -> void:
 	status = "Previsão solicitada; preparando próximo quadro"
 
 func _process(_delta: float) -> void:
-	if enabled and phase.is_empty() and (queue.size() < 2 or weather_requested) and Time.get_ticks_msec() >= retry_at:
+	if enabled and phase.is_empty() and (queue.size() < 2 or weather_requested or reporter_requested) and Time.get_ticks_msec() >= retry_at:
 		generate()
 
 func generate() -> void:
-	if not enabled or not phase.is_empty() or (queue.size() >= 2 and not weather_requested):
+	if not enabled or not phase.is_empty() or (queue.size() >= 2 and not weather_requested and not reporter_requested):
 		return
 	if weather_requested or serial >= next_weather_at:
 		var priority_weather := weather_requested
@@ -71,6 +77,12 @@ func generate() -> void:
 	var anomaly: String = ANOMALIES.pick_random()
 	serial += 1
 	draft = {"editoria": "SANTA IRENE", "model": config.model, "pauta": topic, "anomalia": anomaly}
+	if reporter_requested or serial % 5 == 0:
+		reporter_requested = false
+		draft["kind"] = "reporter"
+		draft["location"] = reporter_location
+		draft["editoria"] = ["AO VIVO • CENTRO", "AO VIVO • CAMPO", "AO VIVO • MIRANTE"][reporter_location]
+		reporter_location = (reporter_location + 1) % 3
 	phase = "headline"
 	status = "Escrevendo manchete"
 	var prompt := "Pauta: %s. Acontecimento: %s. Invente os detalhes e escreva uma única manchete com até 12 palavras, tratando isso como rotina municipal. Apenas a manchete, sem introdução, aspas ou lista." % [topic, anomaly]
@@ -102,7 +114,10 @@ func _completed(result: int, code: int, _headers: PackedStringArray, body: Packe
 		draft["manchete"] = value.split("\n", false)[0].replace("**", "").trim_prefix("# ").strip_edges().left(220)
 		phase = "body"
 		status = "Escrevendo notícia"
-		_send.call_deferred("Manchete: %s\nO fato central que aconteceu de verdade nesta cidade: %s. Escreva esta notícia em aproximadamente 100 palavras. Relate esse fato impossível como rotina, sem transformar em metáfora. Acrescente um prazo preciso, uma consequência banal e uma declaração muito séria de um morador ou funcionário inventado. Apenas o texto que o apresentador vai ler, sem título, sem saudações e sem explicar a piada." % [draft.manchete, draft.anomalia], int(config.get("body_tokens", 350)))
+		var setting := ""
+		if draft.get("kind", "") == "reporter":
+			setting = "Você é um repórter no local: %s. Descreva o que vê e termine devolvendo ao estúdio. " % ["rua comercial de dia", "campo verde de dia", "mirante à noite com a cidade ao fundo"][int(draft.location)]
+		_send.call_deferred(setting + "Manchete: %s\nO fato central que aconteceu de verdade nesta cidade: %s. Escreva esta notícia em aproximadamente 100 palavras. Relate esse fato impossível como rotina, sem transformar em metáfora. Acrescente um prazo preciso, uma consequência banal e uma declaração muito séria de um morador ou funcionário inventado. Apenas o texto que o apresentador vai ler, sem título, sem saudações e sem explicar a piada." % [draft.manchete, draft.anomalia], int(config.get("body_tokens", 350)))
 	else:
 		draft["texto"] = value
 		draft["resumo"] = value.replace("\n", " ").split(". ")[0].left(180)
@@ -118,7 +133,7 @@ func _completed(result: int, code: int, _headers: PackedStringArray, body: Packe
 				headline += "."
 			spoken_text = headline + "\n\n" + value
 		draft["texto_narrado"] = spoken_text
-		Narration.prepare.call_deferred(spoken_text, "thalita" if is_weather else "cadu")
+		Narration.prepare.call_deferred(spoken_text, "thalita" if is_weather else ("jeff" if draft.get("kind", "") == "reporter" else "cadu"))
 
 func _voice_ready(payload: Dictionary) -> void:
 	if phase != "voice":
@@ -146,6 +161,8 @@ func take() -> Dictionary:
 	return queue.pop_front()
 
 func _fail(message: String) -> void:
+	if draft.get("kind", "") == "reporter":
+		reporter_requested = true
 	if draft.get("kind", "") == "weather":
 		weather_requested = true
 	phase = ""
