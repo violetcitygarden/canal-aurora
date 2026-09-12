@@ -1,0 +1,24 @@
+{
+  "programa": "JORNAL AURORA",
+  "edicao": "EDIÇÃO REGIONAL",
+  "noticias": [
+    {
+      "editoria": "SANTA IRENE",
+      "manchete": "Ponte do Cedro terá manutenção nesta segunda-feira",
+      "resumo": "Trânsito será desviado pela estrada municipal das 8h às 17h.",
+      "texto": "A prefeitura de Santa Irene informou que a Ponte do Cedro passará por manutenção nesta segunda-feira. Durante o serviço, o trânsito será desviado pela estrada municipal. A previsão é de que a passagem seja liberada às cinco da tarde."
+    },
+    {
+      "editoria": "SERVIÇOS",
+      "manchete": "Biblioteca municipal amplia horário de atendimento",
+      "resumo": "Novo expediente entra em vigor na próxima semana.",
+      "texto": "A biblioteca municipal do Vale do Cedro ficará aberta até as sete da noite a partir da próxima semana. O novo horário vale de segunda a sexta-feira. Aos sábados, o atendimento permanece até o meio-dia."
+    },
+    {
+      "editoria": "PREVISÃO DO TEMPO",
+      "manchete": "Fim de tarde terá céu nublado em toda a região",
+      "resumo": "Temperaturas devem permanecer entre 18 e 24 graus.",
+      "texto": "O observatório regional informa que a nebulosidade deve permanecer durante a noite. Não há previsão de chuva significativa. A temperatura mínima prevista para Santa Irene é de dezoito graus."
+    }
+  ]
+}

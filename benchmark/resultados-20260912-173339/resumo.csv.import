@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cq57s748ccvqb"
+
+[deps]
+
+files=["res://benchmark/resultados-20260912-173339/resumo.tokens.translation", "res://benchmark/resultados-20260912-173339/resumo.tokens.translation", "res://benchmark/resultados-20260912-173339/resumo.total.translation", "res://benchmark/resultados-20260912-173339/resumo.carregamento.translation", "res://benchmark/resultados-20260912-173339/resumo.processamento.translation"]
+
+source_file="res://benchmark/resultados-20260912-173339/resumo.csv"
+dest_files=["res://benchmark/resultados-20260912-173339/resumo.tokens.translation", "res://benchmark/resultados-20260912-173339/resumo.tokens.translation", "res://benchmark/resultados-20260912-173339/resumo.total.translation", "res://benchmark/resultados-20260912-173339/resumo.carregamento.translation", "res://benchmark/resultados-20260912-173339/resumo.processamento.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

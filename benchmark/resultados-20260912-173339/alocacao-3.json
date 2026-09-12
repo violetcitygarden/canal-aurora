@@ -1,0 +1,23 @@
+{
+  "models": [
+    {
+      "name": "llama3.2:1b-instruct-q4_K_M",
+      "model": "llama3.2:1b-instruct-q4_K_M",
+      "size": 931995319,
+      "digest": "22bc6b92eb0160c4629782fca05a9032c59d306ab2058b7dacc8a4644fbafa02",
+      "details": {
+        "parent_model": "",
+        "format": "gguf",
+        "family": "llama",
+        "families": [
+          "llama"
+        ],
+        "parameter_size": "1.2B",
+        "quantization_level": "Q4_K_M"
+      },
+      "expires_at": "2026-09-12T17:44:26.5793347-03:00",
+      "size_vram": 931995319,
+      "context_length": 2048
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "city": "Santa Irene",
+  "region": "Vale do Cedro",
+  "temperature": 24,
+  "humidity": 73,
+  "pressure": "1016",
+  "wind": "NE  11 km/h",
+  "condition": "Parcialmente nublado",
+  "forecast": [
+    {"period": "Esta noite", "lines": ["Céu parcialmente nublado.", "Névoa nos pontos mais baixos ao amanhecer.", "Mínima de 18°. Ventos fracos de nordeste."]},
+    {"period": "Amanhã", "lines": ["Sol entre nuvens durante a manhã.", "Possibilidade de chuva leve à tarde.", "Máxima de 26°."]}
+  ],
+  "days": [
+    {"name": "SÁB", "condition": "Sol entre\nnuvens", "high": 26, "low": 18, "rain": false},
+    {"name": "DOM", "condition": "Chuvas\nisoladas", "high": 23, "low": 17, "rain": true},
+    {"name": "SEG", "condition": "Sol entre\nnuvens", "high": 25, "low": 18, "rain": false}
+  ],
+  "ticker": "SANTA IRENE   24°   •   VILA NOVA   22°   •   PORTO DAS FLORES   25°   •   VALE DO CEDRO: VISIBILIDADE BOA NAS ESTRADAS   •   OBSERVATÓRIO REGIONAL — BOLETIM DAS 18 HORAS   •   "
+}

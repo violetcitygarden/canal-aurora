@@ -1,0 +1,32 @@
+[
+  {
+    "voice": "cadu",
+    "load_seconds": 2.12,
+    "first_synthesis_seconds": 4.77,
+    "warm_synthesis_seconds": 2.29,
+    "audio_seconds": 24.92,
+    "realtime_factor": 0.092,
+    "sample_rate": 22050,
+    "model_sha256": "765f0809a6ea9035d4a6d0d008dbf8876e68b2dd32029312672fa8f405bdb535"
+  },
+  {
+    "voice": "faber",
+    "load_seconds": 2.85,
+    "first_synthesis_seconds": 1.58,
+    "warm_synthesis_seconds": 1.55,
+    "audio_seconds": 17.01,
+    "realtime_factor": 0.091,
+    "sample_rate": 22050,
+    "model_sha256": "858555e3a064209c57088fe6bd70c4c3dc54d03eaa00c45d5ecaf43a33f95aa7"
+  },
+  {
+    "voice": "jeff",
+    "load_seconds": 1.89,
+    "first_synthesis_seconds": 2.24,
+    "warm_synthesis_seconds": 2.43,
+    "audio_seconds": 24.53,
+    "realtime_factor": 0.099,
+    "sample_rate": 22050,
+    "model_sha256": "3a6f4c46355813c2b7bbc4d16b6d13d60ed72074b952a393baace82a7d0c94b5"
+  }
+]

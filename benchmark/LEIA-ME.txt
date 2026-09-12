@@ -1,0 +1,10 @@
+Preparacao concluida em 12/09/2026:
+- Ollama 0.34.0 instalado via winget (instalador com hash validado).
+- llama3.2:1b-instruct-q4_K_M instalado em C:\Users\andre\.ollama\models.
+- Todos os blobs foram baixados do registro oficial e validados por SHA256.
+- Nenhuma inferencia ou benchmark foi executado.
+- Processos Ollama iniciados nesta preparacao foram encerrados.
+
+Pendencia antes da medicao: a sondagem da GPU no Ollama 0.34.0 registrou falha 0xc0000005 no llama-server da biblioteca cuda_v13. Verificar backend compativel com GTX 1050 Ti (Pascal), ou versao anterior/llama.cpp CUDA 12, quando o usuario encerrar o jogo. Isso ainda nao e teste de desempenho do modelo.
+
+medir.ps1 foi validado sintaticamente, nao executado. Requer API Ollama respondendo em 127.0.0.1:11434. Faz uma rodada inicial e tres com modelo carregado, num_ctx=2048 e num_predict=256. Salva saidas completas, duracoes e alocacao em GPU, e descarrega o modelo ao final. Repeticoes reutilizam o mesmo prompt; o processamento da entrada pode usar cache. Comparar velocidade de geracao, nao tratar total como TTFT.

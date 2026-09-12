@@ -1,0 +1,10 @@
+.godot/
+.venv-voice/
+voice_samples/models/
+godot-path.txt
+preview*.png
+voice_samples/*.log
+voice_samples/*.wav
+voice_samples/weather_auditions/*.mp3
+voice_samples/weather_auditions/*.wav
+voice_samples/weather_auditions/*.json
