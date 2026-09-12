@@ -33,14 +33,15 @@ func _completed(result: int, code: int, _headers: PackedStringArray, body: Packe
 		prepared.emit({})
 		return
 	var payload = JSON.parse_string(body.get_string_from_utf8())
+	prepared.emit(decode_payload(payload))
+
+func decode_payload(payload: Variant) -> Dictionary:
 	if not payload is Dictionary or not payload.get("wav") is String or not payload.get("envelope") is Array:
-		prepared.emit({})
-		return
+		return {}
 	var stream := AudioStreamWAV.load_from_buffer(Marshalls.base64_to_raw(payload.wav))
 	if stream == null:
-		prepared.emit({})
-		return
-	prepared.emit({"_stream": stream, "_envelope": payload.envelope, "_step": float(payload.get("step", 0.02)), "voice": str(payload.get("voice", "cadu")), "audio_seconds": stream.get_length()})
+		return {}
+	return {"_stream": stream, "_envelope": payload.envelope, "_step": float(payload.get("step", 0.02)), "voice": str(payload.get("voice", "cadu")), "audio_seconds": stream.get_length()}
 
 func play_story(story: Dictionary) -> void:
 	stop()

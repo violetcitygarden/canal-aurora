@@ -61,6 +61,28 @@ func _ready() -> void:
 	if not NewsFeed.queue.is_empty():
 		_story_ready()
 
+func preview_reporter(location: int) -> void:
+	automatic = false
+	Narration.stop()
+	var story := {"kind": "reporter", "location": location,
+		"editoria": ["AO VIVO • CENTRO", "AO VIVO • CAMPO", "AO VIVO • MIRANTE"][location],
+		"manchete": "Repórter em campo", "resumo": "F3 cenário • E repetir fala • V voz", "texto": ""}
+	var path := "res://voice_samples/reporter_preview/%d.json" % location
+	if FileAccess.file_exists(path):
+		var payload = JSON.parse_string(FileAccess.get_file_as_string(path))
+		var decoded := Narration.decode_payload(payload)
+		if decoded.get("voice", "") == "jeff":
+			story.merge(decoded)
+			story["texto"] = str(payload.get("text", ""))
+	if not story.has("_stream"):
+		story["resumo"] = "Voz ausente: abra ABRIR-REPORTER.bat para preparar Jeff"
+	items = [story]
+	index = 0
+	entry = 0
+	body_scroll = 0
+	reporter_panel.set_story(story)
+	Narration.play_story(story)
+
 func _story_ready() -> void:
 	if received_first and not NewsFeed.queue.is_empty() and NewsFeed.queue[0].get("kind", "") == "weather":
 		_next_generated()
@@ -167,6 +189,15 @@ func _process(delta: float) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not event.is_pressed() or event.is_echo():
 		return
+	if "--preview-reporter" in OS.get_cmdline_user_args():
+		if event.keycode == KEY_F3:
+			preview_reporter((reporter_panel.location + 1) % 3)
+			return
+		if event.keycode in [KEY_E, KEY_SPACE]:
+			preview_reporter(reporter_panel.location)
+			return
+		if event.keycode in [KEY_A, KEY_G, KEY_W, KEY_R, KEY_LEFT, KEY_RIGHT]:
+			return
 	match event.keycode:
 		KEY_RIGHT, KEY_SPACE:
 			if not _next_generated():

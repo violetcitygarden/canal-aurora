@@ -150,10 +150,7 @@ func _ready() -> void:
 	overlay.set_script(load("res://news_overlay.gd"))
 	canvas.add_child(overlay)
 	if "--preview-reporter" in OS.get_cmdline_user_args():
-		overlay.automatic = false
-		overlay.items = [{"kind": "reporter", "location": 0, "editoria": "REPORTAGEM EXTERNA", "manchete": "Direto de Santa Irene", "resumo": "Repórter em campo • Canal Aurora", "texto": ""}]
-		overlay.index = 0
-		overlay.reporter_panel.set_story(overlay.items[0])
+		overlay.preview_reporter(0)
 	if "--capture-weather" in OS.get_cmdline_user_args():
 		overlay.weather_panel.set_story(preload("res://weather_segment.gd").create())
 	if "--capture-transition" in OS.get_cmdline_user_args():

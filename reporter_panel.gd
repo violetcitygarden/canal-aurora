@@ -50,10 +50,10 @@ func _ready() -> void:
 	environment.environment = world
 	viewport.add_child(environment)
 	var camera := Camera3D.new()
-	camera.position = Vector3(0, 2.5, 7)
-	camera.fov = 46
+	camera.position = Vector3(0, 2.8, 10)
+	camera.fov = 49
 	viewport.add_child(camera)
-	camera.look_at(Vector3(0, 1.7, 0))
+	camera.look_at(Vector3(0, 0.65, 0))
 	camera.current = true
 	sunlight = DirectionalLight3D.new()
 	sunlight.rotation_degrees = Vector3(-35, -30, 0)
@@ -65,9 +65,8 @@ func _ready() -> void:
 	fill.omni_range = 7
 	viewport.add_child(fill)
 	host = Node3D.new()
-	host.set_script(load("res://presenter.gd"))
-	host.reporter_host = true
-	host.position = Vector3(-0.65, 1.1, 0)
+	host.set_script(load("res://reporter.gd"))
+	host.position = Vector3(-0.65, 1.67, 0)
 	host.scale = Vector3.ONE * 1.15
 	viewport.add_child(host)
 	var picture := TextureRect.new()

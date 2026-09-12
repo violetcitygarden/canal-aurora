@@ -7,22 +7,22 @@ import wave
 import subprocess
 import tempfile
 import asyncio
-import edge_tts
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 import numpy as np
 from piper import PiperVoice, SynthesisConfig
 
 ROOT = Path(__file__).resolve().parent
-VOICE = PiperVoice.load(str(ROOT / 'models/pt_BR-cadu-medium.onnx'), use_cuda=False)
+VOICE = None
 JEFF = None
 CONFIG = SynthesisConfig(length_scale=1.08, noise_scale=0.667, noise_w_scale=0.8, normalize_audio=True)
 
 async def thalita_audio(path, text):
+    import edge_tts
     await asyncio.wait_for(edge_tts.Communicate(text, 'pt-BR-ThalitaMultilingualNeural').save(str(path)), timeout=65)
 
 def synthesize(text, voice='cadu'):
-    global JEFF
+    global JEFF, VOICE
     start = time.perf_counter()
     buffer = io.BytesIO()
     if voice == 'thalita':
@@ -47,11 +47,15 @@ def synthesize(text, voice='cadu'):
             data = wave_path.read_bytes()
     else:
         with wave.open(buffer, 'wb') as output:
-            selected = VOICE
+            selected = None
             if voice == 'jeff':
                 if JEFF is None:
                     JEFF = PiperVoice.load(str(ROOT / 'models/pt_BR-jeff-medium.onnx'), use_cuda=False)
                 selected = JEFF
+            else:
+                if VOICE is None:
+                    VOICE = PiperVoice.load(str(ROOT / 'models/pt_BR-cadu-medium.onnx'), use_cuda=False)
+                selected = VOICE
             selected.synthesize_wav(text, output, syn_config=CONFIG)
         data = buffer.getvalue()
     with wave.open(io.BytesIO(data), 'rb') as audio:

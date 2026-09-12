@@ -8,3 +8,6 @@ voice_samples/*.wav
 voice_samples/weather_auditions/*.mp3
 voice_samples/weather_auditions/*.wav
 voice_samples/weather_auditions/*.json
+
+voice_samples/reporter_preview/
+voice_samples/__pycache__/
