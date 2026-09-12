@@ -45,3 +45,5 @@ O jornal inclui uma reportagem externa a cada cinco pautas geradas. E solicita u
 Jeff usa Piper local na CPU, com carregamento do modelo no primeiro pedido. Coloque `pt_BR-jeff-medium.onnx` e `pt_BR-jeff-medium.onnx.json` em `voice_samples/models/` (os mesmos arquivos das amostras anteriores). O script existente `voice_samples/generate.py` baixa os modelos das amostras, incluindo Jeff, se faltarem. Reinicie o servidor de voz após atualizar o código. Se o modelo não estiver disponível, a reportagem aparece sem áudio; não usa Cadu como substituto.
 
 Para ver os três ambientes sem Ollama ou voz: abra com `godot --path . -- --preview-reporter` e pressione F3. E solicita texto e voz apenas na transmissão normal.
+
+Dê dois cliques em `ABRIR-REPORTER.bat` para abrir diretamente o teste visual do repórter, sem iniciar Ollama nem o servidor de voz. F3 alterna os três ambientes. Usa o mesmo `godot-path.txt` do lançador normal. Para testar a narração Jeff, abra `ABRIR-CANAL.bat` e pressione E.
