@@ -1,12 +1,20 @@
 extends "res://geometry.gd"
 var staging := false
 var stage_target := Vector3.ZERO
+var stage_aisle := false
 var leaving := false
 var identity := "NAIR"
 var mouth: Node3D
 var body: Node3D
 var head: Node3D
 var legs: Array[Node3D] = []
+var knees: Array[Node3D] = []
+var seat: Node3D
+var seat_phase := ""
+var seated := false
+var seated_left := 0.0
+var blocked_time := 0.0
+const PERSONAL_SPACE := 0.9
 var opening := 0.0
 var talking := false
 var elapsed := 0.0
@@ -16,6 +24,7 @@ var wait_left := 2.0
 var point_index := 0
 const STOPS := [Vector3(-3.1,0,-1.9),Vector3(0,0,-2.1),Vector3(3.5,0,-1.8),Vector3(3.5,0,2.7),Vector3(-3.2,0,2.7)]
 func _ready() -> void:
+	add_to_group("pensao_actors")
 	body = Node3D.new()
 	add_child(body)
 	var skin := "#bd8c65"
@@ -39,8 +48,13 @@ func _ready() -> void:
 		leg.position = Vector3(side*0.15,0.68,0)
 		body.add_child(leg)
 		legs.append(leg)
-		box(Vector3(0,-0.28,0),Vector3(0.18,0.56,0.19),skin if identity=="NAIR" else "#475969",leg)
-		box(Vector3(0,-0.59,0.07),Vector3(0.23,0.14,0.36),"#3e4138",leg)
+		box(Vector3(0,-0.14,0),Vector3(0.18,0.28,0.19),skin if identity=="NAIR" else "#475969",leg)
+		var knee := Node3D.new()
+		knee.position.y = -0.28
+		leg.add_child(knee)
+		knees.append(knee)
+		box(Vector3(0,-0.14,0),Vector3(0.18,0.28,0.19),skin if identity=="NAIR" else "#475969",knee)
+		box(Vector3(0,-0.31,0.07),Vector3(0.23,0.14,0.36),"#3e4138",knee)
 		beam(Vector3(side*0.31,1.33,0),Vector3(side*0.43,0.92,0.05),0.17,clothes,body)
 		beam(Vector3(side*0.43,0.92,0.05),Vector3(side*0.42,0.69,0.11),0.11,skin,body)
 		sphere(Vector3(side*0.42,0.68,0.11),Vector3(0.08,0.1,0.07),skin,body)
@@ -78,14 +92,21 @@ func _ready() -> void:
 	destination = position
 	wait_left = randf_range(3,7)
 func _process(delta: float) -> void:
-	if not visible: return
+	if not visible:
+		release_seat()
+		return
 	if staging:
 		var direction := stage_target - position
 		rotation.y = snappedf(atan2(direction.x,direction.z), PI/8)
-		position = position.move_toward(stage_target, delta * 1.5)
+		move_with_space(stage_target, delta * 1.5)
 		for i in range(legs.size()): legs[i].rotation.x = sin(elapsed*7+i*PI)*0.25
 		elapsed += delta
+		tick = int(elapsed*10)
 		if position.distance_to(stage_target)<0.05:
+			if stage_aisle:
+				stage_aisle = false
+				stage_target = Vector3(4.8,0,-3.4)
+				return
 			staging = false
 			visible = not leaving
 			destination = position
@@ -99,30 +120,136 @@ func _process(delta: float) -> void:
 	tick = current_tick
 	mouth.scale.y = 1.0 + (floor(opening*3)/3.0)*5.0
 	head.rotation.z = sin(elapsed*0.7)*0.035
+	if seated:
+		seated_left -= dt
+		if seated_left <= 0 and not talking:
+			seated = false
+			body.position.y = 0
+			for knee in knees: knee.rotation.x = 0
+			for leg in legs: leg.rotation.x = 0
+			seat_phase = "exit"
+			destination = seat.get_meta("approach")
+		return
+	# Give entering/leaving actors priority through a crowded aisle.
+	if seat_phase.is_empty() and position.distance_to(destination) < 0.03:
+		for other in get_tree().get_nodes_in_group("pensao_actors"):
+			if other != self and other.visible and other.staging and position.distance_to(other.position) < 1.5:
+				choose_stop()
+				break
 	if position.distance_to(destination) > 0.03:
 		var direction := (destination-position).normalized()
 		rotation.y = snappedf(atan2(direction.x,direction.z), PI/8)
-		position = position.move_toward(destination,dt*0.52)
+		if not move_with_space(destination,dt*0.52):
+			blocked_time += dt
+			if blocked_time > 3 and seat_phase != "exit":
+				release_seat()
+				choose_stop()
+				blocked_time = 0
+		else:
+			blocked_time = 0
 		body.position.y = absf(sin(elapsed*5))*0.018
 		for i in range(legs.size()):
 			legs[i].rotation.x = sin(elapsed*5+i*PI)*0.22
 	else:
+		if seat_phase == "approach":
+			seat_phase = "arrive"
+			destination = seat.position
+			return
+		if seat_phase == "arrive":
+			seated = true
+			seat_phase = "seated"
+			rotation.y = seat.rotation.y
+			body.position.y = -0.08
+			for leg in legs: leg.rotation.x = -PI/2
+			for knee in knees: knee.rotation.x = PI/2
+			seated_left = randf_range(20,55)
+			return
+		if seat_phase == "exit":
+			release_seat()
+			destination = STOPS[point_index]
+			wait_left = randf_range(7,16)
+			return
 		wait_left -= dt
 		for leg in legs:
 			leg.rotation.x = 0
 		if wait_left <= 0:
-			point_index = (point_index+1)%STOPS.size()
-			destination = STOPS[point_index]
+			if randf() < 0.45 and reserve_nearby_seat():
+				return
+			choose_stop()
 			wait_left = randf_range(7,16)
 		elif talking and fmod(elapsed,5.0)<0.1:
 			rotation.y = 0 if randf()<0.65 else PI/2
 
 func change_presence(entering: bool) -> void:
+	# Walk back to the aisle before taking the exit route.
+	var aisle: Vector3 = seat.get_meta("approach") if is_instance_valid(seat) else position
+	stage_aisle = not entering and is_instance_valid(seat)
+	release_seat()
 	staging = true
 	leaving = not entering
 	visible = true
 	if entering:
 		position = Vector3(4.8,0,-3.4)
-		stage_target = Vector3(3.5,0,-1.8)
+		stage_target = Vector3(4.6,0,-1.8)
+		for candidate in [Vector3(3.5,0,-1.8), Vector3(4.6,0,-1.8), Vector3(4.6,0,0)]:
+			if space_available(candidate, true):
+				stage_target = candidate
+				break
 	else:
-		stage_target = Vector3(4.8,0,-3.4)
+		stage_target = aisle if stage_aisle else Vector3(4.8,0,-3.4)
+
+func reserve_nearby_seat() -> bool:
+	for chair in get_tree().get_nodes_in_group("chairs"):
+		var occupant = chair.get_meta("occupant") if chair.has_meta("occupant") else null
+		if is_instance_valid(occupant) and occupant.visible: continue
+		var approach: Vector3 = chair.get_meta("approach")
+		# Only approach from the adjacent aisle, never across the table.
+		if position.distance_to(approach) > 3.3: continue
+		if approach.x < -2 and position.x > -2: continue
+		if approach.x > 2 and position.x < 2: continue
+		if absf(approach.x) < 1 and position.z < 2.5: continue
+		seat = chair
+		seat.set_meta("occupant", self)
+		seat_phase = "approach"
+		destination = approach
+		return true
+	return false
+
+func release_seat() -> void:
+	if is_instance_valid(seat) and seat.has_meta("occupant") and seat.get_meta("occupant") == self:
+		seat.remove_meta("occupant")
+	seat = null
+	seated = false
+	seat_phase = ""
+	if is_instance_valid(body): body.position.y = 0
+	for leg in legs: leg.rotation.x = 0
+	for knee in knees: knee.rotation.x = 0
+
+func _exit_tree() -> void:
+	release_seat()
+
+func space_available(at: Vector3, include_destinations := false) -> bool:
+	for other in get_tree().get_nodes_in_group("pensao_actors"):
+		if other == self or not other.visible: continue
+		if at.distance_to(other.position) < PERSONAL_SPACE: return false
+		if include_destinations and at.distance_to(other.destination) < PERSONAL_SPACE:
+			return false
+	return true
+
+func choose_stop() -> void:
+	for offset in range(1, STOPS.size()+1):
+		var index := (point_index+offset)%STOPS.size()
+		if space_available(STOPS[index], true):
+			point_index = index
+			destination = STOPS[index]
+			return
+	destination = position
+	wait_left = randf_range(2,4)
+
+func move_with_space(target: Vector3, distance: float) -> bool:
+	var next := position.move_toward(target, distance)
+	if space_available(next):
+		position = next
+		return true
+	# Yield instead of pushing another actor or stepping through furniture.
+	return false

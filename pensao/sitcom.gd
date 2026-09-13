@@ -322,7 +322,7 @@ func update_shot(delta: float) -> void:
 		cameras[camera_index].current = true
 		return
 	var actor: Node3D = actors[active]
-	var face := actor.global_position + Vector3(0,1.7,0)
+	var face: Vector3 = actor.head.global_position
 	# Lock the side of the shot at the cut: stepped actor turns must not orbit the camera.
 	var desired: Vector3
 	if shot_kind == 0:
