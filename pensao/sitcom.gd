@@ -141,7 +141,7 @@ func _ready() -> void:
 	layer.add_child(logo)
 	heading = make_label(layer,Vector2(33,164),Vector2(240,28),16)
 	heading.text = ""
-	captions = make_label(layer,Vector2(70,580),Vector2(820,110),24)
+	captions = make_label(layer,Vector2(70,580),Vector2(710,110),24)
 	captions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	captions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label = make_label(layer,Vector2(30,505),Vector2(900,70),16)
