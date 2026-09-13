@@ -5,9 +5,12 @@ var lettering: FontVariation
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	scale = Vector2(0.55, 0.55) / 3.0
-	position = Vector2(804, 630) / 3.0
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	scale = Vector2(0.56, 0.56)
 	rotation = deg_to_rad(-3)
+	var logo_material := ShaderMaterial.new()
+	logo_material.shader = preload("res://logo_vhs.gdshader")
+	material = logo_material
 	lettering = FontVariation.new()
 	lettering.base_font = ThemeDB.fallback_font
 	lettering.variation_embolden = 1.2

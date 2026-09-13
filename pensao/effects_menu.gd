@@ -9,12 +9,8 @@ const OPTIONS := {"strength":"Força do VHS", "noise_amount":"Ruído da fita", "
 
 func _ready() -> void:
 	add_to_group("effects_menu")
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 20
-	var button := Button.new()
-	button.text = "Configurações · F2"
-	button.position = Vector2(738,18)
-	add_child(button)
-	button.pressed.connect(func(): panel.visible = not panel.visible)
 	panel = PanelContainer.new()
 	panel.position = Vector2(225,105)
 	panel.custom_minimum_size = Vector2(510,470)

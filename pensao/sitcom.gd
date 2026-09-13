@@ -136,9 +136,9 @@ func _ready() -> void:
 	layer.add_child(screen)
 	var logo := Control.new()
 	logo.set_script(preload("res://logo.gd"))
-	logo.position = Vector2(25,18)
 	logo.size = Vector2(250,140)
-	credit_layer.add_child(logo)
+	logo.position = Vector2(790,610)
+	layer.add_child(logo)
 	var effects_menu = preload("res://effects_menu.gd").new()
 	effects_menu.material_target = shader
 	layer.add_child(effects_menu)
