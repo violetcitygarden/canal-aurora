@@ -57,12 +57,19 @@ func _ready() -> void:
 	for x in [-1.0,1.0]:
 		for z in [-0.25,0.85]:
 			box(Vector3(x,0.45,z),Vector3(0.055,0.9,0.055),"#737d76")
-	for at in [Vector3(-1.9,0,0.3),Vector3(1.9,0,0.3),Vector3(0,0,1.65)]:
-		box(at+Vector3(0,0.51,0),Vector3(0.65,0.1,0.65),"#8a5843")
-		box(at+Vector3(0,1.0,0.29),Vector3(0.65,0.65,0.08),"#99724b")
+	for spec in [[Vector3(-1.95,0,0.3),PI/2,Vector3(-3.2,0,0.3)], [Vector3(1.95,0,0.3),-PI/2,Vector3(3.5,0,0.3)], [Vector3(0,0,1.85),PI,Vector3(0,0,2.7)]]:
+		var chair := Node3D.new()
+		add_child(chair)
+		chair.position = spec[0]
+		chair.rotation.y = spec[1]
+		chair.add_to_group("chairs")
+		chair.set_meta("approach", spec[2])
+		box(Vector3(0,0.51,0),Vector3(0.65,0.1,0.65),"#8a5843",chair)
+		# Actors face local +Z; the backrest belongs behind them.
+		box(Vector3(0,1.0,-0.29),Vector3(0.65,0.65,0.08),"#99724b",chair)
 		for x in [-0.25,0.25]:
 			for z in [-0.25,0.25]:
-				box(at+Vector3(x,0.25,z),Vector3(0.045,0.5,0.045),"#747f75")
+				box(Vector3(x,0.25,z),Vector3(0.045,0.5,0.045),"#747f75",chair)
 	cylinder(Vector3(0.2,1.05,0.25),0.27,0.07,"#d8d6b8")
 	sphere(Vector3(0.2,1.12,0.25),Vector3(0.19,0.09,0.14),"#bb854b")
 	cylinder(Vector3(-0.65,1.17,0.2),0.11,0.4,"#693f33")
