@@ -137,31 +137,6 @@ def speech(text, speaker):
     return {'wav':base64.b64encode(data).decode(), 'envelope':envelope}
 
 
-def make_laughs():
-    """Original synthetic crowd, independent of scripts. Replace with your own WAVs if desired."""
-    import numpy as np
-    if all((CACHE / f'laugh_{i}.wav').exists() for i in range(3)): return
-    raw = piper_wav('Ha, ha, ha! Ha ha! Ha, ha, ha, ha!', 'jeff')
-    with wave.open(io.BytesIO(raw),'rb') as source:
-        rate = source.getframerate()
-        sample = np.frombuffer(source.readframes(source.getnframes()),dtype='<i2').astype(float)/32768
-    rng = random.Random(1993)
-    for index, duration in enumerate([2.1, 3.2, 4.0]):
-        size = int(rate*duration)
-        crowd = np.zeros(size)
-        for _ in range(10):
-            pitch = rng.uniform(.72,1.5)
-            layer = np.interp(np.arange(0,len(sample),pitch),np.arange(len(sample)),sample)
-            offset = int(rng.uniform(0,.5)*rate)
-            count = min(len(layer), size-offset)
-            crowd[offset:offset+count] += layer[:count]*rng.uniform(.07,.14)
-        crowd *= np.minimum(np.arange(size)/(rate*.12),1)*np.minimum((size-np.arange(size))/(rate*.4),1)
-        crowd = np.clip(crowd,-.9,.9)
-        with wave.open(str(CACHE/f'laugh_{index}.wav'),'wb') as output:
-            output.setparams((1,2,rate,0,'NONE','not compressed'))
-            output.writeframes((crowd*32767).astype('<i2').tobytes())
-
-
 def parse_dialogue(text):
     result = []
     for raw in text.splitlines():
@@ -252,7 +227,6 @@ def main():
     args = parser.parse_args()
     CACHE.mkdir(exist_ok=True)
     logging.basicConfig(level=logging.INFO,format='%(asctime)s %(message)s')
-    make_laughs()
     STATUS['ready'] = True
     threading.Thread(target=worker,args=(args.demo,),daemon=True).start()
     service = ThreadingHTTPServer(('127.0.0.1',args.port),Handler)

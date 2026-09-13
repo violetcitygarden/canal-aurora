@@ -103,11 +103,22 @@ func _ready() -> void:
 	http.timeout = 8
 	http.body_size_limit = 24*1024*1024
 	http.request_completed.connect(_received)
-	for i in range(3):
-		var path := "res://cache/laugh_%d.wav" % i
-		if FileAccess.file_exists(path):
-			var stream := AudioStreamWAV.load_from_file(path)
-			if stream: laughs.append(stream)
+	# User recordings are read directly; no imported resource or synthetic cache needed.
+	var recordings := DirAccess.get_files_at("res://audio")
+	recordings.sort()
+	for filename in recordings:
+		var path := "res://audio/" + filename
+		var stream: AudioStream
+		if filename.get_extension().to_lower() == "mp3":
+			var mp3 := AudioStreamMP3.new()
+			mp3.data = FileAccess.get_file_as_bytes(path)
+			stream = mp3
+		elif filename.get_extension().to_lower() == "wav":
+			stream = AudioStreamWAV.load_from_file(path)
+		if stream and stream.get_length() > 0:
+			laughs.append(stream)
+	if laughs.is_empty():
+		push_warning("Nenhuma risada válida em pensao/audio (MP3 ou WAV).")
 	forced_capture = "--capture" in OS.get_cmdline_user_args()
 	if forced_capture:
 		state = "capture"
@@ -213,7 +224,7 @@ func finish_line() -> void:
 	var selected := should_laugh()
 	if selected and not laughs.is_empty():
 		laughter.stream = laughs[rng.randi_range(0,laughs.size()-1)]
-		laughter.pitch_scale = rng.randf_range(0.94,1.06)
+		laughter.pitch_scale = 1.0
 		laughter.play()
 		state = "laughing"
 	else:

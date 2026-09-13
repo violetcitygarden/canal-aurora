@@ -5,10 +5,10 @@ func _ready() -> void:
 	beam(Vector3(0,4.05,-0.3),Vector3(0,3.5,-0.3),0.025,"#726b54")
 	cylinder(Vector3(0,3.48,-0.3),0.26,0.08,"#e3d9ae")
 	box(Vector3(0, -0.12, 0), Vector3(12, 0.22, 10), "#9b8d75")
-	textured_box(Vector3(0,0,0),Vector3(12,0.025,10),"#d9cba6",preload("res://assets/floor.png"),Vector2(6,5))
+	textured_box(Vector3(0,0,0),Vector3(12,0.025,10),"#d9cba6",load_texture("res://assets/floor.png"),Vector2(6,5))
 	box(Vector3(0, 2.0, -4.6), Vector3(12, 4, 0.16), "#cdc69e")
 	box(Vector3(-5.9, 2.0, 0), Vector3(0.16, 4, 9.2), "#b9b48d")
-	textured_box(Vector3(0,1,-4.49),Vector3(12,2,0.03),"#91b9a3",preload("res://assets/tiles.png"),Vector2(8,2))
+	textured_box(Vector3(0,1,-4.49),Vector3(12,2,0.03),"#91b9a3",load_texture("res://assets/tiles.png"),Vector2(8,2))
 	# Corridor to bedrooms at the right edge.
 	box(Vector3(5.8, 2, -2.8), Vector3(0.2, 4, 3.6), "#9e9a7e")
 	box(Vector3(4.8, 3.6, -4.35), Vector3(2.1, 0.65, 0.3), "#958974")

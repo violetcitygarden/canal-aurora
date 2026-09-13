@@ -27,7 +27,9 @@ Os personagens percorrem pontos em volta da mesa, param, giram em passos e camin
 
 `config.json` contém o prompt completo, o modelo, o endpoint, a temperatura e `laugh_probability`. A risada é **somente um sorteio por fala**: não há classificador, detecção de piada, análise semântica ou marcação pelo modelo. `0.30` é 30% de chance; `0` desliga; `1` ri após todas as falas. O sorteio não garante uma cota por cena. A próxima fala espera a risada terminar.
 
-As três risadas desta primeira versão são uma **plateia sintética**, montada com camadas de voz, diferenças de altura e atraso. Não são gravações da plateia de uma série. Para substituir, coloque WAVs PCM em `cache/laugh_0.wav`, `cache/laugh_1.wav` e `cache/laugh_2.wav`; o servidor preserva os três arquivos existentes.
+As risadas são os arquivos MP3 ou WAV da pasta `audio/`, carregados diretamente e sorteados após as falas. Os três MP3s adicionados ao projeto já são usados. Para trocar ou acrescentar gravações, coloque os arquivos nessa pasta e reinicie. Não há geração de plateia sintética; os antigos `cache/laugh_*.wav` não são usados. A probabilidade continua definida em `config.json`, sem análise do diálogo.
+
+O lançador importa os recursos antes de abrir. As texturas da cozinha também são lidas diretamente dos PNGs, permitindo abrir o cenário mesmo sem cache de importação.
 
 ## Vozes e geração
 

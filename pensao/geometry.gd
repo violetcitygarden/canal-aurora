@@ -50,7 +50,15 @@ func label(words: String, at: Vector3, pixel := 0.004) -> void:
 func textured_box(at: Vector3, size: Vector3, color: String, texture: Texture2D, repeat_uv := Vector2.ONE) -> void:
 	var item := box(at,size,color)
 	var material := mat(color).duplicate() as ShaderMaterial
-	material.set_shader_parameter("textured",true)
+	material.set_shader_parameter("textured",texture != null)
 	material.set_shader_parameter("albedo_tex",texture)
 	material.set_shader_parameter("repeat_uv",repeat_uv)
 	item.material_override = material
+
+func load_texture(path: String) -> Texture2D:
+	# Read source PNGs directly, including first launch without an editor import.
+	var source := Image.load_from_file(path)
+	if source == null or source.is_empty():
+		push_warning("Textura indisponível: " + path + "; usando cor do material.")
+		return null
+	return ImageTexture.create_from_image(source)
