@@ -6,8 +6,8 @@ Projeto Godot 4.4+ independente, dentro desta pasta apenas para facilitar a entr
 
 1. Instale Python 3.10 ou superior e Godot 4.4+.
 2. Use `INICIAR-PENSAO.bat`. Ele cria `.venv` própria, instala as dependências, baixa os modelos necessários e abre o projeto. O `godot-path.txt` da pasta do jornal é aceito se não houver um local.
-3. A primeira conversa tem texto fixo de apresentação. As seguintes são geradas pelo Ollama, com o modelo de `config.json` (por padrão, o mesmo BRD local já usado no canal). O programa inicia o Ollama se encontrá-lo instalado, mas não instala nem importa o modelo.
-4. A primeira preparação de áudio pode levar alguns minutos. Downloads e vozes são reaproveitados nas próximas execuções. Há mensagem na tela enquanto a conversa fica pronta.
+3. Todas as conversas, inclusive a primeira, são geradas pelo Ollama, com o modelo de `config.json` (por padrão, o mesmo BRD local já usado no canal). O programa inicia o Ollama se encontrá-lo instalado, mas não instala nem importa o modelo.
+4. A primeira preparação de áudio pode levar alguns minutos. Downloads e vozes são reaproveitados nas próximas execuções. O terminal mostra o progresso; a janela só abre quando a primeira conversa e todos os seus áudios estão prontos.
 
 Para demonstração com duas conversas fixas, executadas uma vez, sem depender de Ollama: `INICIAR-PENSAO.bat -Demo`. As vozes femininas ainda precisam de internet na primeira síntese de cada fala.
 
@@ -54,7 +54,7 @@ As texturas CC0 baixadas e suas transformações estão descritas em `assets/SOU
 
 ## Presença, câmeras e preparação antecipada
 
-A cena inicial começa com Nair e Jéssica; Valdir entra durante a conversa. Na geração contínua, o servidor mantém quem ficou na cozinha e planeja uma entrada ou saída no meio da próxima cena. O prompt informa presentes e ausentes em cada trecho. O servidor gera dois trechos com listas de presentes separadas e insere a movimentação entre eles. O modelo não precisa escrever marcações ENTRA/SAI. Falas de ausentes e formatos inválidos recebem uma nova tentativa antes da síntese. Os moradores podem mencionar quem está fora; o modelo é orientado a reconhecer chegadas e despedidas. O modo Demo executa suas duas cenas fixas uma vez e termina com um aviso; a tela identifica esse modo como DEMO.
+A cena inicial sorteia dois moradores e gera uma conversa nova. Na geração contínua, o servidor mantém quem ficou na cozinha e planeja uma entrada ou saída no meio da próxima cena. O prompt informa presentes e ausentes em cada trecho. O servidor gera dois trechos com listas de presentes separadas e insere a movimentação entre eles. O modelo não precisa escrever marcações ENTRA/SAI. Falas de ausentes e formatos inválidos recebem uma nova tentativa antes da síntese. Os moradores podem mencionar quem está fora; o modelo é orientado a reconhecer chegadas e despedidas. O modo Demo executa suas duas cenas fixas uma vez e termina com um aviso; a tela identifica esse modo como DEMO.
 
 O Godot espera a caminhada de entrada/saída terminar antes da fala seguinte. Além dos planos gerais, sorteia closes de rosto, câmera baixa inclinada e um plano sobre o fogão por 2–5 segundos, voltando ao plano aberto. O lado do close fica fixo durante o plano e o acompanhamento é suavizado, sem orbitar junto com os giros bruscos do personagem. C continua alternando os planos gerais.
 
@@ -64,4 +64,6 @@ Testes adicionais: `python tests/test_dialogue.py` verifica presença, transiç�
 
 ## Controle de repetição
 
-Antes de sintetizar áudio, o servidor compara as respostas com até 100 falas anteriores e com o trecho atual. Rejeita blocos de frases curtas recicladas, repetições internas e falas longas muito semelhantes. Respostas breves naturais, como “tá bom”, continuam permitidas. Há até três tentativas por trecho; se todas falharem, aparece o erro em vez de reproduzir o bloco repetido. Os assuntos percorrem uma lista embaralhada antes de serem reutilizados. Esse filtro detecta repetição textual, mas não garante originalidade semântica de um modelo pequeno.
+Antes de sintetizar áudio, o servidor compara as respostas com até 100 falas anteriores e com o trecho atual. Rejeita blocos de frases curtas recicladas, repetições internas e falas longas muito semelhantes. Respostas breves naturais, como “tá bom”, continuam permitidas. Após duas tentativas de diálogo completo, o servidor recupera o formato gerando quatro falas individuais, com personagens escolhidos pelo programa. A validação de repetição continua ativa. Se a recuperação falhar, o erro é exibido e uma nova cena é tentada. Os assuntos percorrem uma lista embaralhada antes de serem reutilizados. Esse filtro detecta repetição textual, mas não garante originalidade semântica de um modelo pequeno.
+
+A abertura normal não usa roteiro fixo. O lançador aguarda até dez minutos pela primeira conversa com áudio e mostra o progresso no terminal. O modo `-Demo` continua disponível explicitamente para as duas cenas de teste. Respostas rejeitadas do modelo são registradas em `cache/generation-rejected.jsonl` para diagnóstico; erros antigos são limpos ao começar nova tentativa.

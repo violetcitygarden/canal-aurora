@@ -30,7 +30,7 @@ if (-not $Demo) {
     catch {
         $ollamaExe = Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama.exe'
         if (Test-Path -LiteralPath $ollamaExe) { Start-Process -FilePath $ollamaExe -ArgumentList 'serve' -WindowStyle Hidden }
-        else { Write-Host 'Ollama nao encontrado. A primeira cena e fixa; instale/configure o modelo para gerar as seguintes.' }
+        else { Write-Host 'Ollama nao encontrado no caminho padrao. A abertura precisa do modelo configurado no config.json.' }
     }
 }
 $port = 0
@@ -50,13 +50,20 @@ $service = Start-Process -FilePath $voicePython -ArgumentList $arguments -PassTh
 try {
     Write-Host 'Preparando servidor e vozes da pensao. Pode levar alguns minutos.'
     $ready = $false
-    for ($i=0; $i -lt 240; $i++) {
+    $lastProgress = ''
+    for ($i=0; $i -lt 1200; $i++) {
         $service.Refresh()
         if ($service.HasExited) { throw "Servidor encerrou. Veja cache/server-$port-error.log." }
-        try { $health = Invoke-RestMethod "http://127.0.0.1:$port/health" -TimeoutSec 1; if ($health.ready) { $ready=$true; break } } catch {}
+        try {
+            $health = Invoke-RestMethod "http://127.0.0.1:$port/health" -TimeoutSec 1
+            $progress = [string]$health.status
+            if ($health.error) { $progress += ' - ' + $health.error }
+            if ($progress -ne $lastProgress) { Write-Host $progress; $lastProgress = $progress }
+            if ($health.ready -and $health.queued -gt 0) { $ready=$true; break }
+        } catch {}
         Start-Sleep -Milliseconds 500
     }
-    if (-not $ready) { throw "Servidor nao iniciou. Veja cache/server-$port-error.log." }
+    if (-not $ready) { throw "Primeira conversa nao ficou pronta em 10 minutos. Veja cache/server-$port-error.log." }
     & $godotExe --path $PSScriptRoot
 } finally {
     $service.Refresh()

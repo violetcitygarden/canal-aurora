@@ -195,6 +195,42 @@ def reject_repetition(dialogue, history):
         raise ValueError('A resposta reciclou falas recentes; crie ações e respostas novas')
 
 
+def generate_turns(present, topic, context, direction, history):
+    """Recover malformed multi-speaker output by assigning speakers in code."""
+    dialogue = []
+    order = list(present)
+    random.shuffle(order)
+    for i in range(4):
+        speaker = order[i % len(order)]
+        STATUS['status'] = f'Escrevendo fala {i+1}/4 de {speaker}'
+        for attempt in range(2):
+            response = fetch_json(CONFIG['ollama_endpoint'], {
+                'model': CONFIG['model'],
+                'system': CONFIG['system'] + f'\nAGORA responda somente como {speaker}. Uma única fala, sem nome, lista ou narração. Presentes: {present}. ' + direction,
+                'prompt': f'Assunto: {topic}. Contexto: {context}\n' + '\n'.join(f'{s}: {t}' for s,t in dialogue) + f'\nPróxima resposta de {speaker}:',
+                'stream':False, 'keep_alive':'5m',
+                'options':{'temperature':CONFIG['temperature'],'num_ctx':CONFIG['num_ctx'],'num_predict':160,'repeat_penalty':1.15}})
+            text = re.sub(r'<think>.*?</think>', '', response.get('response',''), flags=re.S).strip()
+            text = re.sub(r'^'+speaker+r'\s*:\s*', '', text, flags=re.I).strip(' "')
+            if not text or len(text)>450 or '\n' in text or re.search(r'(NAIR|VALDIR|J[ÉE]SSICA|MAURO)\s*:',text,re.I):
+                if attempt == 1: raise ValueError(f'Resposta individual inválida de {speaker}; veja cache/generation-rejected.jsonl')
+                continue
+            candidate = dialogue + [(speaker,text)]
+            try: reject_repetition(candidate,history)
+            except ValueError:
+                if attempt == 1: raise
+                continue
+            dialogue = candidate
+            break
+    return dialogue
+
+
+def record_rejection(response, error):
+    CACHE.mkdir(exist_ok=True)
+    with (CACHE/'generation-rejected.jsonl').open('a',encoding='utf-8') as output:
+        output.write(json.dumps({'error':str(error),'response':response.get('response','')},ensure_ascii=False)+'\n')
+
+
 def generate_part(present, topic, context, direction, history=()):
     instruction = (
         f'Presentes nesta parte: {", ".join(present)}. '
@@ -204,7 +240,7 @@ def generate_part(present, topic, context, direction, history=()):
         + direction
     )
     correction = ''
-    for attempt in range(3):
+    for attempt in range(2):
         response = fetch_json(CONFIG['ollama_endpoint'], {
             'model':CONFIG['model'], 'system':CONFIG['system'] + '\n' + instruction,
             'prompt':f'Assunto: {topic}. Contexto anterior:\n{context}\n{correction}',
@@ -217,8 +253,10 @@ def generate_part(present, topic, context, direction, history=()):
             reject_repetition(dialogue, history)
             return dialogue
         except ValueError as error:
+            record_rejection(response,error)
             correction = f'Nova tentativa: {error}. Aborde outro detalhe concreto de {topic}. Faça alguém propor uma ação e outra pessoa reagir. Não recicle respostas. Somente NOME: fala, usando os presentes.'
-            if attempt == 2: raise
+            if attempt == 1:
+                return generate_turns(present,topic,context,direction,history)
 
 
 def generate_scene(present, event, after, topic, recent, history=()):
@@ -258,7 +296,7 @@ def worker(demo_only):
     recent = ''
     previous_topic = ''
     index = 0
-    present = ['NAIR','JESSICA']
+    present = random.sample(IDS,2)
     history = deque(maxlen=100)
     topic_bag = []
     while not STOP.is_set():
@@ -269,7 +307,8 @@ def worker(demo_only):
             if demo_only and index >= 2:
                 STATUS['status'] = 'Demonstração encerrada. Abra sem -Demo para gerar conversas novas.'
                 return
-            if index == 0 or demo_only:
+            STATUS['error'] = ''
+            if demo_only:
                 dialogue = DEMO if index%2==0 else DEMO_TWO
                 source = 'Cena de demonstração'
                 present = ['NAIR','JESSICA'] if index%2==0 else ['MAURO','JESSICA']
@@ -288,10 +327,13 @@ def worker(demo_only):
             logging.info('Texto pronto: %s falas, presentes=%s, evento=%s',len(dialogue),present,event)
             STATUS['status'] = 'Preparando vozes'
             prepared = prepare_scene(dialogue,source,present,event,event_at)
+            if index == 0 and any(not line.get('wav') for line in prepared['lines']):
+                raise RuntimeError('Primeira conversa ainda sem todos os áudios; tentando as vozes novamente')
             prepared['scene_id'] = index + 1
             prepared['demo'] = demo_only
             present = after
             SCENES.put(prepared)
+            STATUS['ready'] = True
             logging.info('Áudios prontos; cenas na fila=%s', SCENES.qsize())
             history.extend(dialogue)
             recent = f'O assunto anterior foi {previous_topic or "a prateleira da geladeira"}. Ele já foi tratado. Agora desenvolva o NOVO assunto, sem reencenar a discussão anterior.'
@@ -332,7 +374,7 @@ def main():
     args = parser.parse_args()
     CACHE.mkdir(exist_ok=True)
     logging.basicConfig(level=logging.INFO,format='%(asctime)s %(message)s')
-    STATUS['ready'] = True
+    STATUS['ready'] = False
     threading.Thread(target=worker,args=(args.demo,),daemon=True).start()
     service = ThreadingHTTPServer(('127.0.0.1',args.port),Handler)
     logging.info('Pensão em http://127.0.0.1:%s',args.port)

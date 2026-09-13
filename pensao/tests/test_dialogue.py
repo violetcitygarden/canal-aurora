@@ -69,4 +69,29 @@ class RepetitionTests(unittest.TestCase):
         self.assertEqual(fetch.call_count,2)
         self.assertIn('esponja',result[0][1])
 
+class StartupTests(unittest.TestCase):
+    def test_malformed_dialogue_recovers_with_assigned_speakers(self):
+        responses=[{'response':'Uma história sem nomes.'}]*2 + [{'response':t} for t in ['A torneira está pingando desde cedo.','Eu deixei uma bacia ali embaixo.','Essa bacia é onde eu lavo a roupa.','Então vou buscar o balde no quintal.']]
+        with patch.object(server,'fetch_json',side_effect=responses), patch.object(server,'record_rejection'):
+            dialogue=server.generate_part(['NAIR','JESSICA'],'torneira','','')
+        self.assertEqual(len(dialogue),4)
+        self.assertEqual(len({s for s,_ in dialogue}),2)
+
+    def test_first_scene_is_generated_and_ready_only_after_audio(self):
+        import queue
+        import tempfile
+        stop=threading.Event()
+        scenes=queue.Queue()
+        dialogue=[('NAIR','Primeira fala nova.'),('JESSICA','Resposta nova.')]
+        status={'ready':False,'status':'','error':''}
+        def prepare(*args):
+            self.assertFalse(status['ready'])
+            stop.set()
+            return {'lines':[{'speaker':s,'text':t,'wav':'test'} for s,t in dialogue]}
+        with tempfile.TemporaryDirectory() as tmp, patch.object(server,'CACHE',Path(tmp)), patch.object(server,'STOP',stop), patch.object(server,'SCENES',scenes), patch.object(server,'STATUS',status), patch.object(server,'generate_scene',return_value=(dialogue,1)) as generate, patch.object(server,'prepare_scene',side_effect=prepare):
+            server.worker(False)
+        self.assertEqual(generate.call_count,1)
+        self.assertTrue(status['ready'])
+        self.assertEqual(scenes.get()['lines'][0]['text'],'Primeira fala nova.')
+
 if __name__ == '__main__': unittest.main()
