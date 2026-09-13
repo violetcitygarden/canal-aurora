@@ -21,6 +21,7 @@ import threading
 import time
 import urllib.request
 import wave
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -78,6 +79,16 @@ def fetch_json(url, payload=None, timeout=90):
 def ensure_model(name):
     MODELS.mkdir(parents=True, exist_ok=True)
     stem = f'pt_BR-{name}-medium'
+    if name == 'nair':
+        if not all((MODELS / (stem+s)).exists() for s in ('.onnx', '.onnx.json')):
+            archive = ROOT / 'pt_BR-nair-medium.zip'
+            with zipfile.ZipFile(archive) as source:
+                for suffix in ('.onnx', '.onnx.json'):
+                    target = MODELS / (stem+suffix)
+                    part = target.with_suffix(target.suffix+'.part')
+                    part.write_bytes(source.read(stem+suffix))
+                    part.replace(target)
+        return MODELS / (stem+'.onnx')
     # Reuse already downloaded journal models if this MVP lives beside it.
     for candidate in [ROOT.parent / 'voice_samples/models', MODELS]:
         if all((candidate / (stem+s)).exists() for s in ('.onnx', '.onnx.json')):
@@ -101,25 +112,26 @@ def piper_wav(text, name):
     if name not in PIPER: PIPER[name] = PiperVoice.load(str(ensure_model(name)), use_cuda=False)
     buffer = io.BytesIO()
     with wave.open(buffer, 'wb') as output:
-        PIPER[name].synthesize_wav(text, output, syn_config=SynthesisConfig(length_scale=1.06, noise_scale=0.667, noise_w_scale=0.8, normalize_audio=True))
+        PIPER[name].synthesize_wav(text, output, syn_config=SynthesisConfig(length_scale=1.0 if name == 'nair' else 1.06, noise_scale=0.667, noise_w_scale=0.8, normalize_audio=True))
     return buffer.getvalue()
 
 
 async def female_audio(text, speaker, target):
     import edge_tts
-    voice, pitch, rate = ('pt-BR-FranciscaNeural', '-15Hz', '-8%') if speaker == 'NAIR' else ('pt-BR-ThalitaMultilingualNeural', '+0Hz', '+0%')
+    voice, pitch, rate = ('pt-BR-ThalitaMultilingualNeural', '+0Hz', '+0%')
     await asyncio.wait_for(edge_tts.Communicate(text, voice, pitch=pitch, rate=rate).save(str(target)), timeout=35)
 
 
 def speech(text, speaker):
-    key = hashlib.sha256(('v1:'+speaker+':'+text).encode()).hexdigest()
+    version = 'v2-nair-local' if speaker == 'NAIR' else 'v1'
+    key = hashlib.sha256((version+':'+speaker+':'+text).encode()).hexdigest()
     target = CACHE / (key+'.wav')
     if not target.exists():
         if time.monotonic() - VOICE_FAILURES.get(speaker, -1000) < 60:
             raise RuntimeError('Voz temporariamente indisponível; aguardando nova tentativa')
         try:
-            if speaker in ('VALDIR', 'MAURO'):
-                data = piper_wav(text, 'faber' if speaker == 'VALDIR' else 'jeff')
+            if speaker in ('NAIR', 'VALDIR', 'MAURO'):
+                data = piper_wav(text, {'NAIR': 'nair', 'VALDIR': 'faber', 'MAURO': 'jeff'}[speaker])
                 target.write_bytes(data)
             else:
                 mp3 = CACHE / (key+'.mp3')

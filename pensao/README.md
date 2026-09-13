@@ -31,11 +31,11 @@ Os personagens percorrem pontos em volta da mesa, param, giram em passos e camin
 
 As risadas são os arquivos MP3 ou WAV da pasta `audio/`, carregados diretamente e sorteados após as falas. Os três MP3s adicionados ao projeto já são usados. Para trocar ou acrescentar gravações, coloque os arquivos nessa pasta e reinicie. Não há geração de plateia sintética; os antigos `cache/laugh_*.wav` não são usados. A probabilidade continua definida em `config.json`, sem análise do diálogo.
 
-O lançador importa os recursos antes de abrir. As texturas da cozinha também são lidas diretamente dos PNGs, permitindo abrir o cenário mesmo sem cache de importação.
+O lançador abre o jogo diretamente, sem executar o editor/importador antes. Cenas e shaders são recursos nativos; texturas, risadas e falas são carregadas diretamente, permitindo abrir mesmo sem cache de importação. `cache/.gdignore` impede o editor de importar os áudios temporários e modelos quando o projeto é aberto para edição.
 
 ## Vozes e geração
 
-- Nair: Microsoft Francisca, mais lenta e grave, via Edge TTS.
+- Nair: Piper local, modelo `pt_BR-nair-medium.zip` fornecido pelo usuário. Extraído automaticamente para `cache/models`, com os mesmos parâmetros da amostra aprovada. O cache da Nair tem uma versão própria para não reutilizar a Francisca antiga.
 - Jéssica: Microsoft Thalita, via Edge TTS.
 - Valdir: Piper Faber, CPU local.
 - Mauro: Piper Jeff, CPU local.

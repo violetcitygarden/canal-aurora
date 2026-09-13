@@ -6,9 +6,9 @@ if (-not (Test-Path -LiteralPath $godotPathFile)) { $godotPathFile = Join-Path (
 if (-not (Test-Path -LiteralPath $godotPathFile)) { throw 'Crie godot-path.txt com o caminho completo do executavel Godot 4.4 ou superior.' }
 $godotExe = (Get-Content -Raw -LiteralPath $godotPathFile).Trim().Trim('"')
 if (-not (Test-Path -LiteralPath $godotExe)) { throw 'Caminho do Godot invalido.' }
-Write-Host 'Importando recursos da pensao...'
-& $godotExe --headless --path $PSScriptRoot --editor --import --quit
-if ($LASTEXITCODE -ne 0) { throw 'Falha ao importar recursos do Godot.' }
+# Scenes/shaders are native resources; textures and audio are loaded from files.
+# Do not launch the editor/importer on every start, especially for generated WAVs.
+Write-Host 'Iniciando a pensao...'
 $voicePython = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $voicePython)) {
     Write-Host 'Criando ambiente separado da pensao...'
