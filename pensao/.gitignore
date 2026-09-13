@@ -1,0 +1,6 @@
+.godot/
+.venv/
+cache/
+__pycache__/
+godot-path.txt
+*.log
