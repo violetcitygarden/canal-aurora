@@ -5,6 +5,7 @@ var lettering: FontVariation
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scale = Vector2(0.55, 0.55)
 	lettering = FontVariation.new()
 	lettering.base_font = ThemeDB.fallback_font
 	lettering.variation_embolden = 1.2
@@ -21,11 +22,12 @@ func _draw() -> void:
 	var colors := [Color("e77179"), Color("efb84e"), Color("58b8ad")]
 	for i in range(3):
 		var y := float(i*7)
-		draw_polyline(PackedVector2Array([Vector2(10,35+y),Vector2(115,5+y),Vector2(230,31+y)]), colors[i], 5, true)
-	word("PENSÃO", Vector2(27,65), 29, Color("efb84e"))
-	word("da", Vector2(16,98), 19, Color("58b8ad"))
-	word("NAIR", Vector2(51,113), 53, Color("e77179"))
-	draw_line(Vector2(54,125), Vector2(219,117), Color("58b8ad"), 5, true)
-	draw_line(Vector2(60,131), Vector2(225,123), Color("efb84e"), 3, true)
-	# Little off-register star, like a printed television title from the eighties.
-	draw_colored_polygon(PackedVector2Array([Vector2(231,69),Vector2(235,79),Vector2(246,82),Vector2(235,86),Vector2(231,97),Vector2(227,86),Vector2(216,82),Vector2(227,79)]), Color("fff0c5"))
+		draw_polyline(PackedVector2Array([Vector2(10,35+y),Vector2(120,5+y),Vector2(230,35+y)]), colors[i], 5, true)
+	centered_word("PENSÃO DA", 65, 24, Color("efb84e"))
+	centered_word("NAIR", 113, 53, Color("e77179"))
+	draw_line(Vector2(37,125), Vector2(203,119), Color("58b8ad"), 5, true)
+	draw_line(Vector2(37,131), Vector2(203,125), Color("efb84e"), 3, true)
+
+func centered_word(text: String, baseline_y: float, size_px: int, color: Color) -> void:
+	var width := lettering.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
+	word(text, Vector2(120.0 - width/2.0, baseline_y), size_px, color)
