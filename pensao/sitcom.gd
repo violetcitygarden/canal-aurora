@@ -134,15 +134,20 @@ func _ready() -> void:
 	shader.shader = preload("res://vhs.gdshader")
 	screen.material = shader
 	layer.add_child(screen)
-	heading = make_label(layer,Vector2(30,22),Vector2(650,40),22)
-	heading.text = "PLAY ▷   PENSÃO NAIR"
+	var logo := Control.new()
+	logo.set_script(preload("res://logo.gd"))
+	logo.position = Vector2(25,18)
+	logo.size = Vector2(250,140)
+	layer.add_child(logo)
+	heading = make_label(layer,Vector2(33,164),Vector2(240,28),16)
+	heading.text = ""
 	captions = make_label(layer,Vector2(70,580),Vector2(820,110),24)
 	captions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	captions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label = make_label(layer,Vector2(30,505),Vector2(900,70),16)
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.text = "Preparando a próxima conversa…"
-	help_label = make_label(layer,Vector2(30,75),Vector2(850,100),18)
+	help_label = make_label(layer,Vector2(30,200),Vector2(850,100),18)
 	help_label.text = "ESPAÇO pausa • C câmera • V VHS • H ajuda\nDiálogos cotidianos • Risadas por sorteio, sem avaliar o texto"
 	help_label.hide()
 	add_child(voice)
@@ -310,7 +315,7 @@ func _received(result: int, code: int, _headers: PackedStringArray, body: Packed
 func begin_scene() -> void:
 	var gap_ms := Time.get_ticks_msec() - last_scene_end_ms if last_scene_end_ms > 0 else 0
 	print("PENSAO_SCENE id=", pending_scene.get("scene_id", 0), " lines=", pending_scene.lines.size(), " wait_ms=", gap_ms)
-	heading.text = "PLAY ▷   PENSÃO NAIR" + (" — DEMO" if pending_scene.get("demo",false) else "")
+	heading.text = "DEMO" if pending_scene.get("demo",false) else ""
 	lines = pending_scene.lines
 	var present: Array = pending_scene.get("present", actors.keys())
 	for id in actors:
@@ -409,7 +414,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			door_sound.stream_paused = paused
 			entrance_jingle.stream_paused = paused
 			for actor in actors.values(): actor.set_process(not paused)
-			heading.text = "PAUSE Ⅱ   PENSÃO NAIR" if paused else "PLAY ▷   PENSÃO NAIR"
+			heading.text = "PAUSADO" if paused else ""
 		KEY_C:
 			end_entrance()
 			camera_index = (camera_index+1)%cameras.size()
