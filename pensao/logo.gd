@@ -6,6 +6,7 @@ var lettering: FontVariation
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	scale = Vector2(0.55, 0.55)
+	position = Vector2(804, 630)
 	lettering = FontVariation.new()
 	lettering.base_font = ThemeDB.fallback_font
 	lettering.variation_embolden = 1.2
@@ -21,8 +22,9 @@ func _draw() -> void:
 	# Three-color eaves suggest the boarding house without a literal illustration.
 	var colors := [Color("e77179"), Color("efb84e"), Color("58b8ad")]
 	for i in range(3):
-		var y := float(i*7)
-		draw_polyline(PackedVector2Array([Vector2(10,35+y),Vector2(120,5+y),Vector2(230,35+y)]), colors[i], 5, true)
+		var y := float(i*5)
+		var half_width := lettering.get_string_size("PENSÃO DA", HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x/2.0 + 5.0
+		draw_polyline(PackedVector2Array([Vector2(120-half_width,36+y),Vector2(120,21+y),Vector2(120+half_width,36+y)]), colors[i], 3, true)
 	centered_word("PENSÃO DA", 65, 24, Color("efb84e"))
 	centered_word("NAIR", 113, 53, Color("e77179"))
 	draw_line(Vector2(37,125), Vector2(203,119), Color("58b8ad"), 5, true)
