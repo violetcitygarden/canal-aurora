@@ -2,6 +2,7 @@
   "model": "qwen3:4b-instruct-2507-q4_K_M",
   "ollama_endpoint": "http://127.0.0.1:11434/api/generate",
   "laugh_probability": 0.3,
+  "personal_topic_probability": 0.35,
   "ambience_volume_db": -20.0,
   "door_volume_db": -14.0,
   "entrance_jingle_volume_db": -12.0,
