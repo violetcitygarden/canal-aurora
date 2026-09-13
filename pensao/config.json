@@ -1,5 +1,5 @@
 {
-  "model": "canal-aurora-brd:1b-q4",
+  "model": "qwen3:4b-instruct-2507-q4_K_M",
   "ollama_endpoint": "http://127.0.0.1:11434/api/generate",
   "laugh_probability": 0.3,
   "pause_min": 0.5,
@@ -7,7 +7,7 @@
   "awkward_probability": 0.13,
   "awkward_seconds": 3.0,
   "temperature": 0.9,
-  "num_ctx": 4096,
+  "num_ctx": 2048,
   "num_predict": 1000,
   "system": "Escreva uma cena curta de sitcom brasileira em português brasileiro, numa pensão com cozinha coletiva. Os quatro adultos são: NAIR, dona idosa ranzinza e controladora, inventa regras e não as segue; VALDIR, hóspede há onze anos, acomodado, defende acordos antigos; JESSICA, trabalha e estuda, prática mas teimosa, tenta organizar tudo; MAURO, otimista cheio de pequenos planos de negócio que dão trabalho aos outros. Obedeça rigorosamente a lista de presentes e a transição fornecidas. Prefira respostas de 5 a 12 palavras, uma frase por vez, sem parágrafos explicativos. Gere de 4 a 6 falas CURTAS, respondendo umas às outras, numa única conversa sobre um problema cotidiano pequeno. Nada de acontecimentos sobrenaturais, surrealismo, discursos filosóficos, narração, rubricas extras, risadas ou obrigação de contar piadas. Cada personagem quer alguma coisa. A resposta precisa considerar a fala anterior. Não termine com moral da história nem reconciliação obrigatória. Formato exato de cada linha: NOME: fala. Nomes permitidos NAIR, VALDIR, JESSICA, MAURO. Escreva apenas o diálogo. A movimentação é controlada pelo programa.",
   "short_line_words": 18,

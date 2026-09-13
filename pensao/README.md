@@ -1,4 +1,6 @@
 # Pensão Nair — MVP
+Configuração atual de teste: `qwen3:4b-instruct-2507-q4_K_M`, contexto de 2.048 tokens. O prompt e as vozes foram mantidos para avaliar o fluxo completo. Para voltar ao escritor anterior, altere `model` para `canal-aurora-brd:1b-q4` em `config.json` e reinicie. O terminal registra `PENSAO_SCENE` com o intervalo real entre cenas em milissegundos (`wait_ms`), sem contar as pausas e risadas internas da cena.
+
 
 Projeto Godot 4.4+ independente, dentro desta pasta apenas para facilitar a entrega no mesmo repositório. Abra `pensao/project.godot` ou dê dois cliques em `INICIAR-PENSAO.bat`. O jornal não carrega a pensão (a pasta possui `.gdignore`). Você pode copiar esta pasta para outro lugar e colocar nela `godot-path.txt` com o caminho do Godot.
 

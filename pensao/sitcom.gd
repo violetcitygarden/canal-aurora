@@ -9,6 +9,7 @@ var http := HTTPRequest.new()
 var config: Dictionary = {}
 var lines: Array = []
 var line_index := -1
+var last_scene_end_ms := 0
 var active := ""
 var envelope: Array = []
 var state := "waiting"
@@ -210,6 +211,8 @@ func _received(result: int, code: int, _headers: PackedStringArray, body: Packed
 	pending_scene = payload
 	if state == "waiting": begin_scene()
 func begin_scene() -> void:
+	var gap_ms := Time.get_ticks_msec() - last_scene_end_ms if last_scene_end_ms > 0 else 0
+	print("PENSAO_SCENE id=", pending_scene.get("scene_id", 0), " lines=", pending_scene.lines.size(), " wait_ms=", gap_ms)
 	heading.text = "PLAY ▷   PENSÃO NAIR" + (" — DEMO" if pending_scene.get("demo",false) else "")
 	lines = pending_scene.lines
 	var present: Array = pending_scene.get("present", actors.keys())
@@ -225,6 +228,7 @@ func next_line() -> void:
 	for actor in actors.values(): actor.talking = false
 	line_index += 1
 	if line_index>=lines.size():
+		last_scene_end_ms = Time.get_ticks_msec()
 		captions.text = ""
 		state = "waiting"
 		fetch_timer = 2.5
