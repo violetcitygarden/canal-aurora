@@ -64,7 +64,9 @@ try {
         Start-Sleep -Milliseconds 500
     }
     if (-not $ready) { throw "Primeira conversa nao ficou pronta em 10 minutos. Veja cache/server-$port-error.log." }
-    & $godotExe --path $PSScriptRoot
+    $playerLog = Join-Path $cache ("player-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + "-$port.log")
+    Write-Host "Log da reproducao: $playerLog"
+    & $godotExe --path $PSScriptRoot --log-file $playerLog
 } finally {
     $service.Refresh()
     if (-not $service.HasExited) { Stop-Process -Id $service.Id }

@@ -15,6 +15,11 @@ var seated := false
 var seated_left := 0.0
 var blocked_time := 0.0
 const PERSONAL_SPACE := 0.9
+const TableRoute = preload("res://table_route.gd")
+var route: Array[Vector3] = []
+var route_target := Vector3(INF, INF, INF)
+var replan_left := 0.0
+var stage_elapsed := 0.0
 var opening := 0.0
 var talking := false
 var elapsed := 0.0
@@ -92,10 +97,15 @@ func _ready() -> void:
 	destination = position
 	wait_left = randf_range(3,7)
 func _process(delta: float) -> void:
+	replan_left = maxf(0, replan_left - delta)
 	if not visible:
 		release_seat()
 		return
 	if staging:
+		stage_elapsed += delta
+		if stage_elapsed > 25.0:
+			finish_staging(true)
+			return
 		var direction := stage_target - position
 		rotation.y = snappedf(atan2(direction.x,direction.z), PI/8)
 		move_with_space(stage_target, delta * 1.5)
@@ -107,10 +117,7 @@ func _process(delta: float) -> void:
 				stage_aisle = false
 				stage_target = Vector3(4.8,0,-3.4)
 				return
-			staging = false
-			visible = not leaving
-			destination = position
-			wait_left = 5
+			finish_staging()
 		return
 	elapsed += delta
 	var current_tick := int(elapsed*10)
@@ -181,6 +188,9 @@ func _process(delta: float) -> void:
 			rotation.y = 0 if randf()<0.65 else PI/2
 
 func change_presence(entering: bool) -> void:
+	route.clear()
+	stage_elapsed = 0.0
+	replan_left = 0.0
 	# Walk back to the aisle before taking the exit route.
 	var aisle: Vector3 = seat.get_meta("approach") if is_instance_valid(seat) else position
 	stage_aisle = not entering and is_instance_valid(seat)
@@ -197,6 +207,18 @@ func change_presence(entering: bool) -> void:
 				break
 	else:
 		stage_target = aisle if stage_aisle else Vector3(4.8,0,-3.4)
+	print("PENSAO_MOVE_START actor=", identity, " leaving=", leaving, " from=", position, " target=", stage_target)
+
+func finish_staging(recovered := false) -> void:
+	# A blocked exit becomes a cut; an arrival stays where it reached.
+	# Never teleport through furniture or leave dialogue waiting indefinitely.
+	print("PENSAO_MOVE_END actor=", identity, " recovered=", recovered, " seconds=", stage_elapsed, " position=", position, " target=", stage_target)
+	staging = false
+	stage_aisle = false
+	visible = not leaving
+	destination = position
+	route.clear()
+	wait_left = 5
 
 func reserve_nearby_seat() -> bool:
 	for chair in get_tree().get_nodes_in_group("chairs"):
@@ -229,6 +251,7 @@ func _exit_tree() -> void:
 	release_seat()
 
 func space_available(at: Vector3, include_destinations := false) -> bool:
+	if TableRoute.BLOCKED.has_point(at): return false
 	for other in get_tree().get_nodes_in_group("pensao_actors"):
 		if other == self or not other.visible: continue
 		if at.distance_to(other.position) < PERSONAL_SPACE: return false
@@ -247,9 +270,29 @@ func choose_stop() -> void:
 	wait_left = randf_range(2,4)
 
 func move_with_space(target: Vector3, distance: float) -> bool:
-	var next := position.move_toward(target, distance)
-	if space_available(next):
+	if route_target != target or route.is_empty():
+		route = TableRoute.path(position, target)
+		route_target = target
+	while not route.is_empty() and position.distance_to(route[0]) < 0.001:
+		route.pop_front()
+	if route.is_empty():
+		return position.distance_to(target) < 0.03
+	var direction := route[0] - position
+	rotation.y = snappedf(atan2(direction.x, direction.z), PI/8)
+	var next := position.move_toward(route[0], distance)
+	var obstacles: Array[Vector3] = []
+	for other in get_tree().get_nodes_in_group("pensao_actors"):
+		if other != self and other.visible: obstacles.append(other.position)
+	if TableRoute.walkable_segment(position, next, obstacles):
 		position = next
 		return true
-	# Yield instead of pushing another actor or stepping through furniture.
+	if replan_left <= 0:
+		replan_left = 0.75
+		# A destination occupied by an idle actor needs to be vacated, too.
+		for other in get_tree().get_nodes_in_group("pensao_actors"):
+			if other == self or not other.visible or other.staging or other.seated: continue
+			if other.position.distance_to(target) < PERSONAL_SPACE and other.seat_phase.is_empty():
+				other.choose_stop()
+		route = TableRoute.path(position, target, obstacles)
+		print("PENSAO_MOVE_REPLAN actor=", identity, " staging=", staging, " position=", position, " target=", target, " waypoints=", route.size())
 	return false

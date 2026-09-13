@@ -18,8 +18,15 @@ func check() -> void:
 	for i in range(30): scene.actors.VALDIR._process(0.1)
 	assert(not scene.actors.VALDIR.staging)
 	scene._process(0.1)
-	scene._process(1)
+	assert(scene.state == "transition", "Falou durante o jingle")
+	scene.entrance_jingle.seek(8.0)
+	scene._process(3.3) # Let the title expire; speech follows audio position, not delta.
+	assert(scene.state == "transition" and scene.active != "VALDIR", "Falou antes do segundo nove")
+	scene.entrance_jingle.seek(9.1)
+	scene._process(0.1)
 	assert(scene.active=="VALDIR")
+	assert(scene.entrance_jingle.playing, "Jingle foi interrompido pela fala")
+	assert(not scene.entrance_name.visible, "Nome não desapareceu")
 	for shot in range(3):
 		scene.shot_kind=shot
 		scene.shot_left=3
@@ -42,5 +49,5 @@ func check() -> void:
 	scene.next_line()
 	for i in range(30): scene.actors.VALDIR._process(0.1)
 	assert(not scene.actors.VALDIR.visible)
-	print("STAGING_OK entry_exit prefetch cameras speaker_timing")
+	print("STAGING_OK entry_exit prefetch cameras speaker_timing speech_at_jingle_second_nine")
 	quit()
