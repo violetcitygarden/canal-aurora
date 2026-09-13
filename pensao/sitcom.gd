@@ -32,6 +32,9 @@ var forced_capture := false
 var pending_scene: Dictionary = {}
 var shot_left := 0.0
 var shot_kind := 0
+var shot_front := Vector3.FORWARD
+var shot_focus := Vector3.ZERO
+var shot_initializing := true
 var special_camera: Camera3D
 var staging_actor: Node3D
 var ready_to_speak := false
@@ -247,7 +250,10 @@ func start_line() -> void:
 		cameras[camera_index].current = true
 	if rng.randf() < 0.65:
 		shot_kind = rng.randi_range(0,2)
+		shot_front = actors[active].global_transform.basis.z.normalized()
+		shot_initializing = true
 		shot_left = rng.randf_range(2,5)
+		update_shot(0.0)
 		special_camera.current = true
 	var stream: AudioStreamWAV
 	if line.get("wav") is String:
@@ -308,15 +314,20 @@ func update_shot(delta: float) -> void:
 		return
 	var actor: Node3D = actors[active]
 	var face := actor.global_position + Vector3(0,1.7,0)
-	var front := actor.global_transform.basis.z.normalized()
+	# Lock the side of the shot at the cut: stepped actor turns must not orbit the camera.
+	var desired: Vector3
 	if shot_kind == 0:
-		special_camera.position = face + front*0.95 + Vector3(0,-0.05,0)
+		desired = face + shot_front*0.95 + Vector3(0,-0.05,0)
 		special_camera.fov = 42
 	elif shot_kind == 1:
-		special_camera.position = actor.global_position + front*1.4 + Vector3(0,0.25,0)
+		desired = actor.global_position + shot_front*1.4 + Vector3(0,0.25,0)
 		special_camera.fov = 68
 	else:
-		special_camera.position = Vector3(1.6,1.35,-3.5)
+		desired = Vector3(1.6,1.35,-3.5)
 		special_camera.fov = 75
-	special_camera.look_at(face)
+	var weight := 1.0 if shot_initializing else 1.0 - exp(-5.0 * delta)
+	special_camera.position = special_camera.position.lerp(desired, weight)
+	shot_focus = shot_focus.lerp(face, weight)
+	shot_initializing = false
+	special_camera.look_at(shot_focus)
 	special_camera.rotation.z = -0.12 if shot_kind == 1 else 0.04

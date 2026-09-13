@@ -140,7 +140,7 @@ def speech(text, speaker):
     return {'wav':base64.b64encode(data).decode(), 'envelope':envelope}
 
 
-def parse_dialogue(text):
+def parse_dialogue(text, min_lines=6):
     result = []
     for raw in text.splitlines():
         match = re.match(r'^\s*(?:\d+[.)]\s*)?\*{0,2}(NAIR|VALDIR|J[ÉE]SSICA|MAURO)\*{0,2}\s*:\s*\*{0,2}(.+)',raw,re.I)
@@ -149,7 +149,7 @@ def parse_dialogue(text):
         line = match[2].strip().strip('*').strip()
         if not line or len(line)>450 or line.startswith(('(', '[')): continue
         result.append((speaker,line))
-    if not 6 <= len(result) <= 20 or len({s for s,_ in result})<2:
+    if not min_lines <= len(result) <= 20 or len({s for s,_ in result})<2:
         raise ValueError('Modelo não devolveu um diálogo utilizável com pelo menos dois personagens')
     return result
 
@@ -167,33 +167,42 @@ def scene_plan(present):
     return before, event, after
 
 
-def parse_scene(text, before, event):
-    marker = ('ENTRA' if event['action'] == 'enter' else 'SAI') + ': ' + event['speaker']
-    raw = [re.sub(r'^\s*(?:\d+[.)]\s*)?', '', line).replace('**','').replace('JÉSSICA','JESSICA').strip() for line in text.splitlines()]
-    markers = [i for i,line in enumerate(raw) if line.strip() == marker]
-    if len(markers) != 1:
-        raise ValueError('A cena precisa conter exatamente a transição combinada: ' + marker)
-    cut = markers[0]
-    before_lines = parse_dialogue_part(raw[:cut])
-    after_lines = parse_dialogue_part(raw[cut+1:])
-    if len(before_lines) < 2 or len(after_lines) < 2:
-        raise ValueError('Faltam falas antes ou depois da entrada/saída')
-    after = before + [event['speaker']] if event['action']=='enter' else [s for s in before if s != event['speaker']]
-    if any(s not in before for s,_ in before_lines) or any(s not in after for s,_ in after_lines):
-        raise ValueError('Personagem ausente tentou falar')
-    dialogue = before_lines + after_lines
-    parse_dialogue('\n'.join(f'{s}: {t}' for s,t in dialogue))
-    return dialogue, len(before_lines)
+def generate_part(present, topic, context, direction):
+    instruction = (
+        f'Presentes nesta parte: {", ".join(present)}. '
+        f'Ausentes: {", ".join(s for s in IDS if s not in present)}. '
+        'Somente os presentes podem falar. Não escreva ENTRA, SAI ou rubricas. '
+        'Escreva de 4 a 6 falas curtas, com pelo menos dois presentes respondendo um ao outro. '
+        + direction
+    )
+    correction = ''
+    for attempt in range(2):
+        response = fetch_json(CONFIG['ollama_endpoint'], {
+            'model':CONFIG['model'], 'system':CONFIG['system'] + '\n' + instruction,
+            'prompt':f'Assunto: {topic}. Contexto anterior:\n{context}\n{correction}',
+            'stream':False, 'keep_alive':'5m',
+            'options':dict({k:CONFIG[k] for k in ('temperature','num_ctx')}, num_predict=450)})
+        try:
+            dialogue = parse_dialogue(response.get('response',''), min_lines=2)
+            if any(s not in present for s,_ in dialogue):
+                raise ValueError('Só podem falar: ' + ', '.join(present))
+            return dialogue
+        except ValueError as error:
+            correction = f'Corrija o formato: {error}. Somente NOME: fala, usando os presentes.'
+            if attempt == 1: raise
 
 
-def parse_dialogue_part(raw):
-    result = []
-    for line in raw:
-        if not line.strip(): continue
-        match = re.fullmatch(r'(NAIR|VALDIR|JESSICA|MAURO):\s*(.+)', line.strip())
-        if not match: raise ValueError('Formato de fala inválido: ' + line[:80])
-        result.append((match[1],match[2]))
-    return result
+def generate_scene(present, event, after, topic, recent):
+    STATUS['status'] = 'Escrevendo conversa antes da movimentação'
+    before_lines = generate_part(present, topic, recent,
+        'Ninguém entra ou sai neste trecho. Não antecipe a movimentação.')
+    context = recent + '\n' + '\n'.join(f'{s}: {t}' for s,t in before_lines)
+    movement = (f"{event['speaker']} acaba de entrar pela porta e não ouviu as falas anteriores."
+                if event['action']=='enter' else f"{event['speaker']} acaba de sair da cozinha e não pode mais responder.")
+    STATUS['status'] = 'Escrevendo continuação após a movimentação'
+    after_lines = generate_part(after, topic, context,
+        movement + ' Reconheça isso naturalmente e continue a mesma conversa. Não repita o trecho anterior.')
+    return before_lines + after_lines, len(before_lines)
 
 
 def prepare_scene(dialogue, source, present=None, event=None, event_at=3):
@@ -236,16 +245,7 @@ def worker(demo_only):
             else:
                 topic = random.choice([t for t in TOPICS if t != previous_topic])
                 present, event, after = scene_plan(present)
-                marker = ('ENTRA' if event['action']=='enter' else 'SAI') + ': ' + event['speaker']
-                staging = f'Presentes no começo: {present}. Ausentes: {[s for s in IDS if s not in present]}. Depois de 3 a 5 falas, escreva exatamente a linha {marker}. Depois disso estão presentes somente {after}. Só presentes podem falar. Ausentes podem ser mencionados ou procurados, mas não respondem. Quem entra não ouviu a conversa anterior. Reconheça naturalmente a chegada ou despedida. Continue com mais 4 a 7 falas.'
-                staging += f'\nExemplo estrutural (troque os textos):\n{present[0]}: primeira fala\n{present[1]}: resposta\n{present[0]}: outra fala\n{marker}\n{after[0]}: reação à mudança\n{after[1]}: resposta\nContinue até completar a cena.'
-                STATUS['status'] = 'Escrevendo próxima conversa'
-                response = fetch_json(CONFIG['ollama_endpoint'], {
-                    'model':CONFIG['model'], 'system':CONFIG['system'] + '\n' + staging,
-                    'prompt':f'Assunto desta cena: {topic}. Uma pessoa quer algo e outra dificulta. Última conversa (apenas para continuidade, sem repetir):\n{recent}',
-                    'stream':False,'keep_alive':'5m',
-                    'options':{k:CONFIG[k] for k in ('temperature','num_ctx','num_predict')}})
-                dialogue, event_at = parse_scene(response.get('response',''), present, event)
+                dialogue, event_at = generate_scene(present, event, after, topic, recent)
                 previous_topic = topic
                 source = 'Diálogo gerado'
             logging.info('Texto pronto: %s falas, presentes=%s, evento=%s',len(dialogue),present,event)
