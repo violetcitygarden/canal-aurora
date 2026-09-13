@@ -3,6 +3,9 @@ import truststore
 truststore.inject_into_ssl()
 
 from concurrent.futures import ThreadPoolExecutor
+from collections import deque
+from difflib import SequenceMatcher
+import unicodedata
 import argparse
 import asyncio
 import base64
@@ -167,7 +170,32 @@ def scene_plan(present):
     return before, event, after
 
 
-def generate_part(present, topic, context, direction):
+def normalized_line(text):
+    return ' '.join(re.sub(r'[^a-z0-9 ]', ' ', unicodedata.normalize('NFKD',text.casefold()).encode('ascii','ignore').decode()).split())
+
+
+def reject_repetition(dialogue, history):
+    old = [normalized_line(text) for _,text in history]
+    seen = []
+    repeats = 0
+    exact_repeats = 0
+    for _,text in dialogue:
+        line = normalized_line(text)
+        if line in old: exact_repeats += 1
+        if seen.count(line) >= 2:
+            raise ValueError("A mesma fala curta apareceu três vezes")
+        # Short acknowledgements are natural; repeated substantive lines are not.
+        if len(line.split()) >= 5:
+            matches = lambda other: line == other or SequenceMatcher(None,line,other).ratio() >= .88
+            if any(matches(other) for other in seen):
+                raise ValueError('A resposta repetiu uma fala dentro do próprio trecho')
+            if any(matches(other) for other in old): repeats += 1
+        seen.append(line)
+    if (exact_repeats >= 3 and exact_repeats / max(len(dialogue),1) >= .6) or repeats >= 2 or repeats / max(len(dialogue),1) >= .35:
+        raise ValueError('A resposta reciclou falas recentes; crie ações e respostas novas')
+
+
+def generate_part(present, topic, context, direction, history=()):
     instruction = (
         f'Presentes nesta parte: {", ".join(present)}. '
         f'Ausentes: {", ".join(s for s in IDS if s not in present)}. '
@@ -176,32 +204,33 @@ def generate_part(present, topic, context, direction):
         + direction
     )
     correction = ''
-    for attempt in range(2):
+    for attempt in range(3):
         response = fetch_json(CONFIG['ollama_endpoint'], {
             'model':CONFIG['model'], 'system':CONFIG['system'] + '\n' + instruction,
             'prompt':f'Assunto: {topic}. Contexto anterior:\n{context}\n{correction}',
             'stream':False, 'keep_alive':'5m',
-            'options':dict({k:CONFIG[k] for k in ('temperature','num_ctx')}, num_predict=450)})
+            'options':dict({k:CONFIG[k] for k in ('temperature','num_ctx')}, num_predict=450, repeat_penalty=1.15, repeat_last_n=256)})
         try:
             dialogue = parse_dialogue(response.get('response',''), min_lines=2)
             if any(s not in present for s,_ in dialogue):
                 raise ValueError('Só podem falar: ' + ', '.join(present))
+            reject_repetition(dialogue, history)
             return dialogue
         except ValueError as error:
-            correction = f'Corrija o formato: {error}. Somente NOME: fala, usando os presentes.'
-            if attempt == 1: raise
+            correction = f'Nova tentativa: {error}. Aborde outro detalhe concreto de {topic}. Faça alguém propor uma ação e outra pessoa reagir. Não recicle respostas. Somente NOME: fala, usando os presentes.'
+            if attempt == 2: raise
 
 
-def generate_scene(present, event, after, topic, recent):
+def generate_scene(present, event, after, topic, recent, history=()):
     STATUS['status'] = 'Escrevendo conversa antes da movimentação'
     before_lines = generate_part(present, topic, recent,
-        'Ninguém entra ou sai neste trecho. Não antecipe a movimentação.')
-    context = recent + '\n' + '\n'.join(f'{s}: {t}' for s,t in before_lines)
+        'Comece uma situação nova sobre o assunto indicado. Ninguém entra ou sai neste trecho. Não antecipe a movimentação.', history)
+    context = '\n'.join(f'{s}: {t}' for s,t in before_lines)
     movement = (f"{event['speaker']} acaba de entrar pela porta e não ouviu as falas anteriores."
                 if event['action']=='enter' else f"{event['speaker']} acaba de sair da cozinha e não pode mais responder.")
     STATUS['status'] = 'Escrevendo continuação após a movimentação'
     after_lines = generate_part(after, topic, context,
-        movement + ' Reconheça isso naturalmente e continue a mesma conversa. Não repita o trecho anterior.')
+        movement + ' Reconheça isso naturalmente e avance a situação com uma ação ou informação nova. Não reinicie a conversa nem repita o trecho anterior.', list(history) + before_lines)
     return before_lines + after_lines, len(before_lines)
 
 
@@ -230,11 +259,16 @@ def worker(demo_only):
     previous_topic = ''
     index = 0
     present = ['NAIR','JESSICA']
+    history = deque(maxlen=100)
+    topic_bag = []
     while not STOP.is_set():
         if SCENES.full():
             STOP.wait(.5)
             continue
         try:
+            if demo_only and index >= 2:
+                STATUS['status'] = 'Demonstração encerrada. Abra sem -Demo para gerar conversas novas.'
+                return
             if index == 0 or demo_only:
                 dialogue = DEMO if index%2==0 else DEMO_TWO
                 source = 'Cena de demonstração'
@@ -243,18 +277,24 @@ def worker(demo_only):
                 event_at = 3
                 after = present + [event['speaker']]
             else:
-                topic = random.choice([t for t in TOPICS if t != previous_topic])
+                if not topic_bag:
+                    topic_bag = random.sample(TOPICS,len(TOPICS))
+                    if topic_bag[-1] == previous_topic: topic_bag.reverse()
+                topic = topic_bag.pop()
                 present, event, after = scene_plan(present)
-                dialogue, event_at = generate_scene(present, event, after, topic, recent)
+                dialogue, event_at = generate_scene(present, event, after, topic, recent, history)
                 previous_topic = topic
                 source = 'Diálogo gerado'
             logging.info('Texto pronto: %s falas, presentes=%s, evento=%s',len(dialogue),present,event)
             STATUS['status'] = 'Preparando vozes'
             prepared = prepare_scene(dialogue,source,present,event,event_at)
+            prepared['scene_id'] = index + 1
+            prepared['demo'] = demo_only
             present = after
             SCENES.put(prepared)
             logging.info('Áudios prontos; cenas na fila=%s', SCENES.qsize())
-            recent = '\n'.join(f'{s}: {t}' for s,t in dialogue[-6:])
+            history.extend(dialogue)
+            recent = f'O assunto anterior foi {previous_topic or "a prateleira da geladeira"}. Ele já foi tratado. Agora desenvolva o NOVO assunto, sem reencenar a discussão anterior.'
             with (CACHE/'dialogues.jsonl').open('a',encoding='utf-8') as output:
                 output.write(json.dumps({'source':source,'lines':[{'speaker':s,'text':t} for s,t in dialogue]},ensure_ascii=False)+'\n')
             index += 1

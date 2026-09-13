@@ -9,7 +9,7 @@ Projeto Godot 4.4+ independente, dentro desta pasta apenas para facilitar a entr
 3. A primeira conversa tem texto fixo de apresentação. As seguintes são geradas pelo Ollama, com o modelo de `config.json` (por padrão, o mesmo BRD local já usado no canal). O programa inicia o Ollama se encontrá-lo instalado, mas não instala nem importa o modelo.
 4. A primeira preparação de áudio pode levar alguns minutos. Downloads e vozes são reaproveitados nas próximas execuções. Há mensagem na tela enquanto a conversa fica pronta.
 
-Para demonstração com duas conversas fixas alternadas, sem depender de Ollama: `INICIAR-PENSAO.bat -Demo`. As vozes femininas ainda precisam de internet na primeira síntese de cada fala.
+Para demonstração com duas conversas fixas, executadas uma vez, sem depender de Ollama: `INICIAR-PENSAO.bat -Demo`. As vozes femininas ainda precisam de internet na primeira síntese de cada fala.
 
 ## Controles
 
@@ -40,7 +40,7 @@ O lançador importa os recursos antes de abrir. As texturas da cozinha também s
 
 Piper: modelos de https://huggingface.co/rhasspy/piper-voices/tree/main/pt/pt_BR. Modelos do jornal são reutilizados quando já existem; caso contrário, a pensão baixa seus próprios. As falas femininas são enviadas ao serviço Edge TTS pela internet. O diálogo é escrito pelo Ollama local. O servidor da pensão usa apenas loopback, em uma porta livre entre 11450 e 11460, e é encerrado pelo lançador ao fechar o Godot.
 
-A geração pede 10–16 falas cotidianas, com personagens respondendo uns aos outros, sem surrealismo obrigatório nem instrução para produzir piadas. O parser aceita 6–20 falas válidas e pelo menos dois participantes. Respostas inválidas recebem nova tentativa; não são anunciadas como uma cena pronta. Uma pequena lembrança das últimas falas é enviada à próxima geração. A fila prepara até duas cenas enquanto a atual toca.
+A geração pede 10–16 falas cotidianas, com personagens respondendo uns aos outros, sem surrealismo obrigatório nem instrução para produzir piadas. O parser aceita 6–20 falas válidas e pelo menos dois participantes. Respostas inválidas recebem nova tentativa; não são anunciadas como uma cena pronta. Entre cenas, só é enviado o assunto anterior como contexto, sem copiar as falas. Durante a mesma cena, o segundo trecho recebe o primeiro para continuar a conversa. A fila prepara até duas cenas enquanto a atual toca.
 
 Se uma voz falhar, o erro é registrado e a fala aparece com legenda e aviso de áudio indisponível. Se o Ollama falhar, a cozinha continua animada enquanto tenta novamente. As falas originais são arquivadas em `cache/dialogues.jsonl`; áudio e logs ficam em `cache/`, fora do Git. Esse cache cresce durante uso prolongado e pode ser apagado com a aplicação fechada.
 
@@ -54,10 +54,14 @@ As texturas CC0 baixadas e suas transformações estão descritas em `assets/SOU
 
 ## Presença, câmeras e preparação antecipada
 
-A cena inicial começa com Nair e Jéssica; Valdir entra durante a conversa. Na geração contínua, o servidor mantém quem ficou na cozinha e planeja uma entrada ou saída no meio da próxima cena. O prompt informa presentes e ausentes em cada trecho. O servidor gera dois trechos com listas de presentes separadas e insere a movimentação entre eles. O modelo não precisa escrever marcações ENTRA/SAI. Falas de ausentes e formatos inválidos recebem uma nova tentativa antes da síntese. Os moradores podem mencionar quem está fora; o modelo é orientado a reconhecer chegadas e despedidas. O modo Demo ainda alterna seus elencos fixos entre as duas cenas.
+A cena inicial começa com Nair e Jéssica; Valdir entra durante a conversa. Na geração contínua, o servidor mantém quem ficou na cozinha e planeja uma entrada ou saída no meio da próxima cena. O prompt informa presentes e ausentes em cada trecho. O servidor gera dois trechos com listas de presentes separadas e insere a movimentação entre eles. O modelo não precisa escrever marcações ENTRA/SAI. Falas de ausentes e formatos inválidos recebem uma nova tentativa antes da síntese. Os moradores podem mencionar quem está fora; o modelo é orientado a reconhecer chegadas e despedidas. O modo Demo executa suas duas cenas fixas uma vez e termina com um aviso; a tela identifica esse modo como DEMO.
 
 O Godot espera a caminhada de entrada/saída terminar antes da fala seguinte. Além dos planos gerais, sorteia closes de rosto, câmera baixa inclinada e um plano sobre o fogão por 2–5 segundos, voltando ao plano aberto. O lado do close fica fixo durante o plano e o acompanhamento é suavizado, sem orbitar junto com os giros bruscos do personagem. C continua alternando os planos gerais.
 
 O servidor prepara cenas enquanto a atual toca, com até quatro tarefas de áudio e um bloqueio por personagem para preservar os modelos e arquivos. O player também busca antecipadamente uma próxima cena. Isso reduz intervalos, mas a geração local ou serviços de voz lentos ainda podem esvaziar a fila. Durante espera, a tela exibe a etapa de geração, progresso de áudio ou erro recebido; os detalhes ficam nos logs `cache/server-PORTA-error.log`. Nenhuma conversa repetida é inserida automaticamente para esconder falhas.
 
 Testes adicionais: `python tests/test_dialogue.py` verifica presença, transições e concorrência das vozes; `godot --headless --path . --script res://tests/staging.gd` verifica entrada/saída, instante da fala, prefetch e câmeras.
+
+## Controle de repetição
+
+Antes de sintetizar áudio, o servidor compara as respostas com até 100 falas anteriores e com o trecho atual. Rejeita blocos de frases curtas recicladas, repetições internas e falas longas muito semelhantes. Respostas breves naturais, como “tá bom”, continuam permitidas. Há até três tentativas por trecho; se todas falharem, aparece o erro em vez de reproduzir o bloco repetido. Os assuntos percorrem uma lista embaralhada antes de serem reutilizados. Esse filtro detecta repetição textual, mas não garante originalidade semântica de um modelo pequeno.

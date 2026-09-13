@@ -210,6 +210,7 @@ func _received(result: int, code: int, _headers: PackedStringArray, body: Packed
 	pending_scene = payload
 	if state == "waiting": begin_scene()
 func begin_scene() -> void:
+	heading.text = "PLAY ▷   PENSÃO NAIR" + (" — DEMO" if pending_scene.get("demo",false) else "")
 	lines = pending_scene.lines
 	var present: Array = pending_scene.get("present", actors.keys())
 	for id in actors:

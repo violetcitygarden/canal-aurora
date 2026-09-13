@@ -47,4 +47,26 @@ class DialogueTests(unittest.TestCase):
         self.assertEqual([line.get('wav') for line in scene['lines']],['NAIR','MAURO'])
         self.assertEqual(scene['lines'][1]['event'],event)
 
+class RepetitionTests(unittest.TestCase):
+    def test_rejects_recycled_five_short_phrases(self):
+        lines=[('NAIR','Quer café?'),('JESSICA','Quero sim.'),('NAIR','Está quente.'),('JESSICA','Vou esperar.'),('NAIR','Tá bom.')]
+        with self.assertRaises(ValueError): server.reject_repetition(lines,lines)
+
+    def test_rejects_near_duplicate_substantive_lines(self):
+        old=[('NAIR','Você precisa lavar essa panela antes do almoço.'),('JESSICA','Eu vou lavar essa panela depois do almoço.')]
+        new=[('NAIR','Você precisa lavar essa panela antes do almoço!'),('JESSICA','Eu vou lavar essa panela depois do almoço!')]
+        with self.assertRaises(ValueError): server.reject_repetition(new,old)
+
+    def test_allows_brief_acknowledgement_in_new_conversation(self):
+        server.reject_repetition([('NAIR','Tá bom.'),('JESSICA','Eu deixei a chave da lavanderia com o porteiro.')],[('NAIR','Tá bom.')])
+
+    def test_retry_discards_repeated_output(self):
+        old=[('NAIR','Você precisa lavar essa panela antes do almoço.'),('JESSICA','Eu vou lavar essa panela depois do almoço.')]
+        repeated='\n'.join(f'{s}: {t}' for s,t in old)
+        fresh='NAIR: A esponja nova está no armário.\nJESSICA: Vou pegar antes que sumam com ela.'
+        with patch.object(server,'fetch_json',side_effect=[{'response':repeated},{'response':fresh}]) as fetch:
+            result=server.generate_part(['NAIR','JESSICA'],'louça','','',old)
+        self.assertEqual(fetch.call_count,2)
+        self.assertIn('esponja',result[0][1])
+
 if __name__ == '__main__': unittest.main()
