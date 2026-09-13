@@ -195,7 +195,26 @@ def reject_repetition(dialogue, history):
         raise ValueError('A resposta reciclou falas recentes; crie ações e respostas novas')
 
 
-def generate_turns(present, topic, context, direction, history):
+def length_instruction(allow_long):
+    words = CONFIG.get('short_line_words',18)
+    chars = CONFIG.get('short_line_chars',110)
+    text = f'Prefira 5 a 12 palavras por fala, uma frase direta. Limite: {words} palavras e {chars} caracteres por fala. '
+    if allow_long:
+        text += f'Somente UMA fala deste trecho pode excepcionalmente chegar a {CONFIG.get("long_line_words",36)} palavras e {CONFIG.get("long_line_chars",210)} caracteres. '
+    return text
+
+
+def validate_lengths(dialogue, allow_long=False):
+    long_count = 0
+    for _,text in dialogue:
+        if len(text.split()) <= CONFIG.get('short_line_words',18) and len(text) <= CONFIG.get('short_line_chars',110):
+            continue
+        long_count += 1
+        if not allow_long or long_count > 1 or len(text.split()) > CONFIG.get('long_line_words',36) or len(text) > CONFIG.get('long_line_chars',210):
+            raise ValueError('Fala longa demais. Reescreva com uma frase curta, sem explicações adicionais. ' + length_instruction(allow_long))
+
+
+def generate_turns(present, topic, context, direction, history, allow_long=False):
     """Recover malformed multi-speaker output by assigning speakers in code."""
     dialogue = []
     order = list(present)
@@ -203,11 +222,12 @@ def generate_turns(present, topic, context, direction, history):
     for i in range(4):
         speaker = order[i % len(order)]
         STATUS['status'] = f'Escrevendo fala {i+1}/4 de {speaker}'
+        correction = ''
         for attempt in range(2):
             response = fetch_json(CONFIG['ollama_endpoint'], {
                 'model': CONFIG['model'],
-                'system': CONFIG['system'] + f'\nAGORA responda somente como {speaker}. Uma única fala, sem nome, lista ou narração. Presentes: {present}. ' + direction,
-                'prompt': f'Assunto: {topic}. Contexto: {context}\n' + '\n'.join(f'{s}: {t}' for s,t in dialogue) + f'\nPróxima resposta de {speaker}:',
+                'system': CONFIG['system'] + f'\nAGORA responda somente como {speaker}. Uma única fala, sem nome, lista ou narração. Presentes: {present}. ' + direction + length_instruction(allow_long),
+                'prompt': f'Assunto: {topic}. Contexto: {context}\n' + '\n'.join(f'{s}: {t}' for s,t in dialogue) + f'\nPróxima resposta de {speaker}: {correction}',
                 'stream':False, 'keep_alive':'5m',
                 'options':{'temperature':CONFIG['temperature'],'num_ctx':CONFIG['num_ctx'],'num_predict':160,'repeat_penalty':1.15}})
             text = re.sub(r'<think>.*?</think>', '', response.get('response',''), flags=re.S).strip()
@@ -216,8 +236,11 @@ def generate_turns(present, topic, context, direction, history):
                 if attempt == 1: raise ValueError(f'Resposta individual inválida de {speaker}; veja cache/generation-rejected.jsonl')
                 continue
             candidate = dialogue + [(speaker,text)]
-            try: reject_repetition(candidate,history)
-            except ValueError:
+            try:
+                validate_lengths(candidate,allow_long)
+                reject_repetition(candidate,history)
+            except ValueError as error:
+                correction = str(error)
                 if attempt == 1: raise
                 continue
             dialogue = candidate
@@ -232,12 +255,13 @@ def record_rejection(response, error):
 
 
 def generate_part(present, topic, context, direction, history=()):
+    allow_long = random.random() < CONFIG.get('long_turn_chance',0.25)
     instruction = (
         f'Presentes nesta parte: {", ".join(present)}. '
         f'Ausentes: {", ".join(s for s in IDS if s not in present)}. '
         'Somente os presentes podem falar. Não escreva ENTRA, SAI ou rubricas. '
         'Escreva de 4 a 6 falas curtas, com pelo menos dois presentes respondendo um ao outro. '
-        + direction
+        + direction + length_instruction(allow_long)
     )
     correction = ''
     for attempt in range(2):
@@ -250,13 +274,14 @@ def generate_part(present, topic, context, direction, history=()):
             dialogue = parse_dialogue(response.get('response',''), min_lines=2)
             if any(s not in present for s,_ in dialogue):
                 raise ValueError('Só podem falar: ' + ', '.join(present))
+            validate_lengths(dialogue,allow_long)
             reject_repetition(dialogue, history)
             return dialogue
         except ValueError as error:
             record_rejection(response,error)
             correction = f'Nova tentativa: {error}. Aborde outro detalhe concreto de {topic}. Faça alguém propor uma ação e outra pessoa reagir. Não recicle respostas. Somente NOME: fala, usando os presentes.'
             if attempt == 1:
-                return generate_turns(present,topic,context,direction,history)
+                return generate_turns(present,topic,context,direction,history,allow_long)
 
 
 def generate_scene(present, event, after, topic, recent, history=()):

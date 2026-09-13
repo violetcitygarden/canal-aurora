@@ -94,4 +94,23 @@ class StartupTests(unittest.TestCase):
         self.assertTrue(status['ready'])
         self.assertEqual(scenes.get()['lines'][0]['text'],'Primeira fala nova.')
 
+class LengthTests(unittest.TestCase):
+    def test_short_exchange(self):
+        server.validate_lengths([('NAIR','Quem deixou a torneira aberta?'),('JESSICA','Foi o Mauro. Eu acabei de chegar.')])
+
+    def test_long_lines_are_exception(self):
+        line=' '.join(['palavra']*20)
+        with self.assertRaises(ValueError): server.validate_lengths([('NAIR',line)])
+        server.validate_lengths([('NAIR',line)],True)
+        with self.assertRaises(ValueError): server.validate_lengths([('NAIR',line),('JESSICA',line)],True)
+        with self.assertRaises(ValueError): server.validate_lengths([('NAIR',' '.join(['palavra']*40))],True)
+
+    def test_turn_rewrites_overlong_response(self):
+        texts=[' '.join(['palavra']*50),'Quem deixou esse balde aqui?','Eu trouxe para lavar o chão.','Então coloca perto da porta.','Tá, mas cuidado para não tropeçar.']
+        with patch.object(server,'fetch_json',side_effect=[{'response':t} for t in texts]) as fetch:
+            dialogue=server.generate_turns(['NAIR','JESSICA'],'balde','','',[])
+        self.assertEqual(fetch.call_count,5)
+        server.validate_lengths(dialogue)
+        self.assertIn('Fala longa demais',fetch.call_args_list[1].args[1]['prompt'])
+
 if __name__ == '__main__': unittest.main()
