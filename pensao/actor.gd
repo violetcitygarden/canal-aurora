@@ -1,4 +1,7 @@
 extends "res://geometry.gd"
+var staging := false
+var stage_target := Vector3.ZERO
+var leaving := false
 var identity := "NAIR"
 var mouth: Node3D
 var body: Node3D
@@ -75,6 +78,19 @@ func _ready() -> void:
 	destination = position
 	wait_left = randf_range(3,7)
 func _process(delta: float) -> void:
+	if not visible: return
+	if staging:
+		var direction := stage_target - position
+		rotation.y = snappedf(atan2(direction.x,direction.z), PI/8)
+		position = position.move_toward(stage_target, delta * 1.5)
+		for i in range(legs.size()): legs[i].rotation.x = sin(elapsed*7+i*PI)*0.25
+		elapsed += delta
+		if position.distance_to(stage_target)<0.05:
+			staging = false
+			visible = not leaving
+			destination = position
+			wait_left = 5
+		return
 	elapsed += delta
 	var current_tick := int(elapsed*10)
 	if tick == current_tick:
@@ -100,3 +116,13 @@ func _process(delta: float) -> void:
 			wait_left = randf_range(7,16)
 		elif talking and fmod(elapsed,5.0)<0.1:
 			rotation.y = 0 if randf()<0.65 else PI/2
+
+func change_presence(entering: bool) -> void:
+	staging = true
+	leaving = not entering
+	visible = true
+	if entering:
+		position = Vector3(4.8,0,-3.4)
+		stage_target = Vector3(3.5,0,-1.8)
+	else:
+		stage_target = Vector3(4.8,0,-3.4)

@@ -2,6 +2,7 @@
 import truststore
 truststore.inject_into_ssl()
 
+from concurrent.futures import ThreadPoolExecutor
 import argparse
 import asyncio
 import base64
@@ -60,6 +61,8 @@ VOICE_FAILURES = {}
 SCENES = queue.Queue(maxsize=2)
 STATUS = {'status': 'Preparando vozes', 'ready': False, 'error': ''}
 STOP = threading.Event()
+VOICE_LOCKS = {speaker: threading.Lock() for speaker in IDS}
+POOL = ThreadPoolExecutor(max_workers=4)
 
 
 def fetch_json(url, payload=None, timeout=90):
@@ -151,23 +154,73 @@ def parse_dialogue(text):
     return result
 
 
-def prepare_scene(dialogue, source):
-    lines = []
-    for speaker,text in dialogue:
+def scene_plan(present):
+    before = list(present)
+    if len(before) == 2 or (len(before) == 3 and random.random() < .55):
+        who = random.choice([s for s in IDS if s not in before])
+        event = {'action':'enter', 'speaker':who}
+        after = before + [who]
+    else:
+        who = random.choice(before)
+        event = {'action':'exit', 'speaker':who}
+        after = [s for s in before if s != who]
+    return before, event, after
+
+
+def parse_scene(text, before, event):
+    marker = ('ENTRA' if event['action'] == 'enter' else 'SAI') + ': ' + event['speaker']
+    raw = [re.sub(r'^\s*(?:\d+[.)]\s*)?', '', line).replace('**','').replace('JÉSSICA','JESSICA').strip() for line in text.splitlines()]
+    markers = [i for i,line in enumerate(raw) if line.strip() == marker]
+    if len(markers) != 1:
+        raise ValueError('A cena precisa conter exatamente a transição combinada: ' + marker)
+    cut = markers[0]
+    before_lines = parse_dialogue_part(raw[:cut])
+    after_lines = parse_dialogue_part(raw[cut+1:])
+    if len(before_lines) < 2 or len(after_lines) < 2:
+        raise ValueError('Faltam falas antes ou depois da entrada/saída')
+    after = before + [event['speaker']] if event['action']=='enter' else [s for s in before if s != event['speaker']]
+    if any(s not in before for s,_ in before_lines) or any(s not in after for s,_ in after_lines):
+        raise ValueError('Personagem ausente tentou falar')
+    dialogue = before_lines + after_lines
+    parse_dialogue('\n'.join(f'{s}: {t}' for s,t in dialogue))
+    return dialogue, len(before_lines)
+
+
+def parse_dialogue_part(raw):
+    result = []
+    for line in raw:
+        if not line.strip(): continue
+        match = re.fullmatch(r'(NAIR|VALDIR|JESSICA|MAURO):\s*(.+)', line.strip())
+        if not match: raise ValueError('Formato de fala inválido: ' + line[:80])
+        result.append((match[1],match[2]))
+    return result
+
+
+def prepare_scene(dialogue, source, present=None, event=None, event_at=3):
+    def prepare(item):
+        speaker,text = item
         line = {'speaker':speaker,'text':text}
-        try: line.update(speech(text,speaker))
+        try:
+            with VOICE_LOCKS[speaker]: line.update(speech(text,speaker))
         except Exception as error:
             logging.exception('Voz %s falhou',speaker)
             line['voice_error'] = str(error)
             STATUS['error'] = f'Voz {speaker}: {error}'
-        lines.append(line)
-    return {'lines':lines,'source':source}
+        return line
+    futures = [POOL.submit(prepare,item) for item in dialogue]
+    lines = []
+    for i,future in enumerate(futures):
+        STATUS['status'] = f'Preparando áudio {i+1}/{len(dialogue)}'
+        lines.append(future.result())
+    if event: lines[event_at]['event'] = event
+    return {'lines':lines,'source':source,'present':present or list(dict.fromkeys(s for s,_ in dialogue))}
 
 
 def worker(demo_only):
     recent = ''
     previous_topic = ''
     index = 0
+    present = ['NAIR','JESSICA']
     while not STOP.is_set():
         if SCENES.full():
             STOP.wait(.5)
@@ -176,25 +229,37 @@ def worker(demo_only):
             if index == 0 or demo_only:
                 dialogue = DEMO if index%2==0 else DEMO_TWO
                 source = 'Cena de demonstração'
+                present = ['NAIR','JESSICA'] if index%2==0 else ['MAURO','JESSICA']
+                event = {'action':'enter','speaker':'VALDIR' if index%2==0 else 'NAIR'}
+                event_at = 3
+                after = present + [event['speaker']]
             else:
                 topic = random.choice([t for t in TOPICS if t != previous_topic])
+                present, event, after = scene_plan(present)
+                marker = ('ENTRA' if event['action']=='enter' else 'SAI') + ': ' + event['speaker']
+                staging = f'Presentes no começo: {present}. Ausentes: {[s for s in IDS if s not in present]}. Depois de 3 a 5 falas, escreva exatamente a linha {marker}. Depois disso estão presentes somente {after}. Só presentes podem falar. Ausentes podem ser mencionados ou procurados, mas não respondem. Quem entra não ouviu a conversa anterior. Reconheça naturalmente a chegada ou despedida. Continue com mais 4 a 7 falas.'
+                staging += f'\nExemplo estrutural (troque os textos):\n{present[0]}: primeira fala\n{present[1]}: resposta\n{present[0]}: outra fala\n{marker}\n{after[0]}: reação à mudança\n{after[1]}: resposta\nContinue até completar a cena.'
                 STATUS['status'] = 'Escrevendo próxima conversa'
                 response = fetch_json(CONFIG['ollama_endpoint'], {
-                    'model':CONFIG['model'], 'system':CONFIG['system'],
+                    'model':CONFIG['model'], 'system':CONFIG['system'] + '\n' + staging,
                     'prompt':f'Assunto desta cena: {topic}. Uma pessoa quer algo e outra dificulta. Última conversa (apenas para continuidade, sem repetir):\n{recent}',
                     'stream':False,'keep_alive':'5m',
                     'options':{k:CONFIG[k] for k in ('temperature','num_ctx','num_predict')}})
-                dialogue = parse_dialogue(response.get('response',''))
+                dialogue, event_at = parse_scene(response.get('response',''), present, event)
                 previous_topic = topic
                 source = 'Diálogo gerado'
+            logging.info('Texto pronto: %s falas, presentes=%s, evento=%s',len(dialogue),present,event)
             STATUS['status'] = 'Preparando vozes'
-            prepared = prepare_scene(dialogue,source)
+            prepared = prepare_scene(dialogue,source,present,event,event_at)
+            present = after
             SCENES.put(prepared)
+            logging.info('Áudios prontos; cenas na fila=%s', SCENES.qsize())
             recent = '\n'.join(f'{s}: {t}' for s,t in dialogue[-6:])
             with (CACHE/'dialogues.jsonl').open('a',encoding='utf-8') as output:
                 output.write(json.dumps({'source':source,'lines':[{'speaker':s,'text':t} for s,t in dialogue]},ensure_ascii=False)+'\n')
             index += 1
             STATUS['status'] = 'Cena pronta'
+            STATUS['error'] = ''
         except Exception as error:
             STATUS['error'] = str(error)
             STATUS['status'] = 'Redação indisponível; tentando novamente'
@@ -208,7 +273,7 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(200,dict(STATUS,service='pensao-nair',version=1,queued=SCENES.qsize()))
         elif self.path == '/next':
             try: self.reply(200,SCENES.get_nowait())
-            except queue.Empty: self.reply(204,{})
+            except queue.Empty: self.reply(202,dict(STATUS,queued=0))
         else: self.reply(404,{'error':'not found'})
     def reply(self,code,payload):
         body = json.dumps(payload,ensure_ascii=False).encode() if code!=204 else b''

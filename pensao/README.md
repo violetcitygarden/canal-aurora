@@ -51,3 +51,13 @@ Se uma voz falhar, o erro é registrado e a fala aparece com legenda e aviso de 
 - `godot --path . -- --capture` salva uma captura em `/tmp/pensao-preview.png` (opção de desenvolvimento para Linux).
 
 As texturas CC0 baixadas e suas transformações estão descritas em `assets/SOURCES.md`.
+
+## Presença, câmeras e preparação antecipada
+
+A cena inicial começa com Nair e Jéssica; Valdir entra durante a conversa. Na geração contínua, o servidor mantém quem ficou na cozinha e planeja uma entrada ou saída no meio da próxima cena. O prompt informa presentes e ausentes em cada trecho. Falas de ausentes, transições faltantes e formatos inválidos são rejeitados antes da síntese. Os moradores podem mencionar quem está fora; o modelo é orientado a reconhecer chegadas e despedidas. O modo Demo ainda alterna seus elencos fixos entre as duas cenas.
+
+O Godot espera a caminhada de entrada/saída terminar antes da fala seguinte. Além dos planos gerais, sorteia closes de rosto, câmera baixa inclinada e um plano sobre o fogão por 2–5 segundos, voltando ao plano aberto. C continua alternando os planos gerais.
+
+O servidor prepara cenas enquanto a atual toca, com até quatro tarefas de áudio e um bloqueio por personagem para preservar os modelos e arquivos. O player também busca antecipadamente uma próxima cena. Isso reduz intervalos, mas a geração local ou serviços de voz lentos ainda podem esvaziar a fila. Durante espera, a tela exibe a etapa de geração, progresso de áudio ou erro recebido; os detalhes ficam nos logs `cache/server-PORTA-error.log`. Nenhuma conversa repetida é inserida automaticamente para esconder falhas.
+
+Testes adicionais: `python tests/test_dialogue.py` verifica presença, transições e concorrência das vozes; `godot --headless --path . --script res://tests/staging.gd` verifica entrada/saída, instante da fala, prefetch e câmeras.

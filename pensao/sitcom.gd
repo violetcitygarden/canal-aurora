@@ -29,6 +29,12 @@ var scene_number := 0
 var rng := RandomNumberGenerator.new()
 var camera_index := 0
 var forced_capture := false
+var pending_scene: Dictionary = {}
+var shot_left := 0.0
+var shot_kind := 0
+var special_camera: Camera3D
+var staging_actor: Node3D
+var ready_to_speak := false
 func _ready() -> void:
 	rng.randomize()
 	var parsed = JSON.parse_string(FileAccess.get_file_as_string("res://config.json"))
@@ -74,6 +80,8 @@ func _ready() -> void:
 		view.add_child(camera)
 		camera.look_at(Vector3(0,1.25,-1))
 		cameras.append(camera)
+	special_camera = Camera3D.new()
+	view.add_child(special_camera)
 	cameras[0].current = true
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -90,7 +98,8 @@ func _ready() -> void:
 	captions = make_label(layer,Vector2(70,580),Vector2(820,110),24)
 	captions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	captions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_label = make_label(layer,Vector2(30,530),Vector2(900,44),18)
+	status_label = make_label(layer,Vector2(30,505),Vector2(900,70),16)
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.text = "Preparando a próxima conversa…"
 	help_label = make_label(layer,Vector2(30,75),Vector2(850,100),18)
 	help_label.text = "ESPAÇO pausa • C câmera • V VHS • H ajuda\nDiálogos cotidianos • Risadas por sorteio, sem avaliar o texto"
@@ -142,6 +151,20 @@ func _process(delta: float) -> void:
 		get_viewport().get_texture().get_image().save_png("/tmp/pensao-preview.png")
 		get_tree().quit()
 	if paused: return
+	update_shot(delta)
+	if state != "capture" and pending_scene.is_empty():
+		fetch_timer -= delta
+		if fetch_timer <= 0 and not fetching:
+			fetch_timer = 2
+			fetching = true
+			if http.request("http://127.0.0.1:%d/next" % server_port) != OK:
+				fetching = false
+	if state == "transition":
+		if not staging_actor.staging:
+			state = "gap"
+			remaining = 0.6
+			ready_to_speak = true
+		return
 	for actor in actors.values(): actor.opening = 0
 	if state == "speaking":
 		if voice.playing:
@@ -156,20 +179,22 @@ func _process(delta: float) -> void:
 		remaining -= delta
 		if remaining<=0:
 			if state == "silent_line": finish_line()
+			elif ready_to_speak:
+				ready_to_speak = false
+				start_line()
 			else: next_line()
-	elif state == "waiting":
-		fetch_timer -= delta
-		if fetch_timer <= 0 and not fetching:
-			fetch_timer = 3
-			fetching = true
-			var error := http.request("http://127.0.0.1:%d/next" % server_port)
-			if error != OK:
-				fetching = false
-				status_label.text = "Abra INICIAR-PENSAO.bat para iniciar os diálogos."
+	elif state == "waiting" and not pending_scene.is_empty():
+		begin_scene()
 func _received(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	fetching = false
+	if code == 202:
+		var progress = JSON.parse_string(body.get_string_from_utf8())
+		if state == "waiting" and progress is Dictionary:
+			status_label.text = str(progress.get("status","Preparando…"))
+			if progress.get("error","") != "": status_label.text += " — " + str(progress.error).left(170)
+		return
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
-		status_label.text = "Preparando a próxima conversa…" if code==204 else "Servidor indisponível; tentando novamente…"
+		if state == "waiting": status_label.text = "Servidor indisponível; tentando novamente…"
 		return
 	var payload = JSON.parse_string(body.get_string_from_utf8())
 	if not payload is Dictionary or not payload.get("lines") is Array: return
@@ -178,7 +203,16 @@ func _received(result: int, code: int, _headers: PackedStringArray, body: Packed
 		if line is Dictionary and actors.has(str(line.get("speaker",""))) and line.get("text") is String:
 			validated.append(line)
 	if validated.is_empty(): return
-	lines = validated
+	payload.lines = validated
+	pending_scene = payload
+	if state == "waiting": begin_scene()
+func begin_scene() -> void:
+	lines = pending_scene.lines
+	var present: Array = pending_scene.get("present", actors.keys())
+	for id in actors:
+		actors[id].visible = id in present
+	pending_scene = {}
+	fetch_timer = 0
 	line_index = -1
 	scene_number += 1
 	status_label.text = ""
@@ -193,12 +227,28 @@ func next_line() -> void:
 		cameras[0].current = true
 		return
 	var line: Dictionary = lines[line_index]
+	if line.has("event"):
+		var event: Dictionary = line.event
+		staging_actor = actors[event.speaker]
+		staging_actor.change_presence(event.action == "enter")
+		state = "transition"
+		cameras[0].current = true
+		shot_left = 0
+		captions.text = ""
+		return
+	start_line()
+func start_line() -> void:
+	var line: Dictionary = lines[line_index]
 	active = line.speaker
 	actors[active].talking = true
 	captions.text = "%s: %s" % [active.capitalize(),line.text]
 	if line_index==0 or rng.randf()<0.4:
 		camera_index = rng.randi_range(0,cameras.size()-1)
 		cameras[camera_index].current = true
+	if rng.randf() < 0.65:
+		shot_kind = rng.randi_range(0,2)
+		shot_left = rng.randf_range(2,5)
+		special_camera.current = true
 	var stream: AudioStreamWAV
 	if line.get("wav") is String:
 		stream = AudioStreamWAV.load_from_buffer(Marshalls.base64_to_raw(line.wav))
@@ -249,3 +299,24 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			help_label.visible = help
 		KEY_F11:
 			get_window().mode = Window.MODE_WINDOWED if get_window().mode==Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
+
+func update_shot(delta: float) -> void:
+	if shot_left <= 0 or active == "": return
+	shot_left -= delta
+	if shot_left <= 0:
+		cameras[camera_index].current = true
+		return
+	var actor: Node3D = actors[active]
+	var face := actor.global_position + Vector3(0,1.7,0)
+	var front := actor.global_transform.basis.z.normalized()
+	if shot_kind == 0:
+		special_camera.position = face + front*0.95 + Vector3(0,-0.05,0)
+		special_camera.fov = 42
+	elif shot_kind == 1:
+		special_camera.position = actor.global_position + front*1.4 + Vector3(0,0.25,0)
+		special_camera.fov = 68
+	else:
+		special_camera.position = Vector3(1.6,1.35,-3.5)
+		special_camera.fov = 75
+	special_camera.look_at(face)
+	special_camera.rotation.z = -0.12 if shot_kind == 1 else 0.04
