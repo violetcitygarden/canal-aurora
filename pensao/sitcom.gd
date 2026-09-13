@@ -138,7 +138,10 @@ func _ready() -> void:
 	logo.set_script(preload("res://logo.gd"))
 	logo.position = Vector2(25,18)
 	logo.size = Vector2(250,140)
-	layer.add_child(logo)
+	credit_layer.add_child(logo)
+	var effects_menu = preload("res://effects_menu.gd").new()
+	effects_menu.material_target = shader
+	layer.add_child(effects_menu)
 	heading = make_label(layer,Vector2(33,164),Vector2(240,28),16)
 	heading.text = ""
 	captions = make_label(layer,Vector2(70,580),Vector2(710,110),24)
@@ -420,8 +423,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			camera_index = (camera_index+1)%cameras.size()
 			cameras[camera_index].current = true
 		KEY_V:
-			vhs = not vhs
-			screen.material.set_shader_parameter("enabled",vhs)
+			get_tree().call_group("effects_menu", "toggle_effects")
 		KEY_H:
 			help = not help
 			help_label.visible = help

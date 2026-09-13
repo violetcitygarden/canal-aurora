@@ -5,8 +5,9 @@ var lettering: FontVariation
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	scale = Vector2(0.55, 0.55)
-	position = Vector2(804, 630)
+	scale = Vector2(0.55, 0.55) / 3.0
+	position = Vector2(804, 630) / 3.0
+	rotation = deg_to_rad(-3)
 	lettering = FontVariation.new()
 	lettering.base_font = ThemeDB.fallback_font
 	lettering.variation_embolden = 1.2

@@ -1,6 +1,10 @@
 """Independent sitcom writer and voice preparation service. Localhost only."""
-import truststore
-truststore.inject_into_ssl()
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except ImportError:
+    # The system CA bundle is sufficient on Linux/Colab; truststore is optional.
+    truststore = None
 
 from concurrent.futures import ThreadPoolExecutor
 from collections import deque
@@ -24,11 +28,17 @@ import wave
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from lore import PERSONAL_TOPICS, load_memory, context as lore_context, save_delivered
 
 ROOT = Path(__file__).resolve().parent
 CACHE = ROOT / 'cache'
 MODELS = CACHE / 'models'
 CONFIG = json.loads((ROOT / 'config.json').read_text(encoding='utf-8'))
+CONFIG['system'] += (' Quando o assunto for pessoal, permita perguntas sobre relacionamentos, '
+                     'família, amizades e passado, com respostas e reações entre os presentes. '
+                     'Siga a continuidade fornecida, sem recitar biografias e sem alongar as falas.')
+LORE_PATH = ROOT / 'memory' / 'personal.json'
+LORE_LOCK = threading.Lock()
 IDS = ('NAIR', 'VALDIR', 'JESSICA', 'MAURO')
 TOPICS = ['um pote sem nome na geladeira', 'a divisão da conta do gás', 'uma cadeira que mudou de lugar',
           'roupa esquecida no varal', 'o horário de usar o liquidificador', 'alguém deixou uma colher dentro do açúcar',
@@ -336,6 +346,8 @@ def prepare_scene(dialogue, source, present=None, event=None, event_at=3):
 
 
 def worker(demo_only):
+    memory = load_memory(LORE_PATH)
+    previous_personal = False
     recent = ''
     previous_topic = ''
     index = 0
@@ -351,6 +363,7 @@ def worker(demo_only):
                 STATUS['status'] = 'Demonstração encerrada. Abra sem -Demo para gerar conversas novas.'
                 return
             STATUS['error'] = ''
+            personal = False
             if demo_only:
                 dialogue = DEMO if index%2==0 else DEMO_TWO
                 source = 'Cena de demonstração'
@@ -363,8 +376,11 @@ def worker(demo_only):
                     topic_bag = random.sample(TOPICS,len(TOPICS))
                     if topic_bag[-1] == previous_topic: topic_bag.reverse()
                 topic = topic_bag.pop()
+                personal = not previous_personal and random.random() < float(CONFIG.get('personal_topic_probability', 0.35))
+                if personal:
+                    topic = random.choice(PERSONAL_TOPICS)
                 present, event, after = scene_plan(present)
-                dialogue, event_at = generate_scene(present, event, after, topic, recent, history)
+                dialogue, event_at = generate_scene(present, event, after, topic, recent + '\n' + lore_context(memory), history)
                 previous_topic = topic
                 source = 'Diálogo gerado'
             logging.info('Texto pronto: %s falas, presentes=%s, evento=%s',len(dialogue),present,event)
@@ -374,6 +390,11 @@ def worker(demo_only):
                 raise RuntimeError('Primeira conversa ainda sem todos os áudios; tentando as vozes novamente')
             prepared['scene_id'] = index + 1
             prepared['demo'] = demo_only
+            prepared['personal'] = personal
+            previous_personal = personal
+            if personal:
+                memory.append({'lines': [{'speaker': s, 'text': t} for s, t in dialogue]})
+                memory = memory[-20:]
             present = after
             SCENES.put(prepared)
             STATUS['ready'] = True
@@ -397,7 +418,14 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/health':
             self.reply(200,dict(STATUS,service='pensao-nair',version=1,queued=SCENES.qsize()))
         elif self.path == '/next':
-            try: self.reply(200,SCENES.get_nowait())
+            try:
+                with LORE_LOCK:
+                    scene = SCENES.get_nowait()
+                    try:
+                        save_delivered(LORE_PATH, scene)
+                    except OSError:
+                        logging.exception('Não foi possível salvar a continuidade pessoal')
+                self.reply(200, scene)
             except queue.Empty: self.reply(202,dict(STATUS,queued=0))
         else: self.reply(404,{'error':'not found'})
     def reply(self,code,payload):
