@@ -95,22 +95,28 @@ class StartupTests(unittest.TestCase):
         self.assertEqual(scenes.get()['lines'][0]['text'],'Primeira fala nova.')
 
 class LengthTests(unittest.TestCase):
-    def test_short_exchange(self):
-        server.validate_lengths([('NAIR','Quem deixou a torneira aberta?'),('JESSICA','Foi o Mauro. Eu acabei de chegar.')])
+    def test_split_preserves_words_without_writer(self):
+        text=' '.join(['palavra']*50)
+        chunks=server.split_speech(text)
+        self.assertGreater(len(chunks),1)
+        self.assertEqual(' '.join(chunks),text)
+        self.assertTrue(all(len(t.split())<=18 for t in chunks))
 
-    def test_long_lines_are_exception(self):
-        line=' '.join(['palavra']*20)
-        with self.assertRaises(ValueError): server.validate_lengths([('NAIR',line)])
-        server.validate_lengths([('NAIR',line)],True)
-        with self.assertRaises(ValueError): server.validate_lengths([('NAIR',line),('JESSICA',line)],True)
-        with self.assertRaises(ValueError): server.validate_lengths([('NAIR',' '.join(['palavra']*40))],True)
-
-    def test_turn_rewrites_overlong_response(self):
-        texts=[' '.join(['palavra']*50),'Quem deixou esse balde aqui?','Eu trouxe para lavar o chão.','Então coloca perto da porta.','Tá, mas cuidado para não tropeçar.']
+    def test_long_turn_is_accepted_without_length_retry(self):
+        texts=[' '.join(['palavra']*50),'Quem deixou esse balde aqui?','Eu trouxe para lavar o chão.','Então coloca perto da porta.']
         with patch.object(server,'fetch_json',side_effect=[{'response':t} for t in texts]) as fetch:
             dialogue=server.generate_turns(['NAIR','JESSICA'],'balde','','',[])
-        self.assertEqual(fetch.call_count,5)
-        server.validate_lengths(dialogue)
-        self.assertIn('Fala longa demais',fetch.call_args_list[1].args[1]['prompt'])
+        self.assertEqual(fetch.call_count,4)
+        self.assertEqual(dialogue[0][1],texts[0])
+
+    def test_split_keeps_event_and_laughter_boundary(self):
+        event={'action':'enter','speaker':'MAURO'}
+        with patch.object(server,'speech',return_value={'wav':'test'}):
+            scene=server.prepare_scene([('NAIR','Oi.'),('MAURO',' '.join(['palavra']*40))],'test',['NAIR'],event,1)
+        self.assertEqual(scene['lines'][1]['event'],event)
+        self.assertEqual(sum('event' in line for line in scene['lines']),1)
+        self.assertTrue(scene['lines'][1]['continues'])
+        self.assertTrue(scene['lines'][-1]['continuation'])
+        self.assertFalse(scene['lines'][-1]['continues'])
 
 if __name__ == '__main__': unittest.main()

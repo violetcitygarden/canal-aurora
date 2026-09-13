@@ -70,4 +70,4 @@ A abertura normal não usa roteiro fixo. O lançador aguarda até dez minutos pe
 
 ## Tamanho das falas
 
-O padrão pede 5–12 palavras e valida o máximo de 18 palavras/110 caracteres. Em 25% dos trechos, permite-se até uma fala maior, limitada a 36 palavras/210 caracteres. Assim, falas longas são exceções, não uma cota obrigatória. Respostas acima dos limites são reescritas antes do áudio, sem cortar frases no meio. Os limites estão em `config.json` (`short_line_*`, `long_line_*`, `long_turn_chance`) e também valem para a recuperação por personagem.
+O prompt prefere 5–12 palavras, mas o tamanho não rejeita mais a resposta nem pede reescrita ao modelo. Textos longos são divididos localmente em blocos de até 18 palavras/110 caracteres, priorizando finais de frase e preservando todas as palavras. Cada bloco tem seu áudio; continuações recebem pausa curta e só o último bloco sorteia a risada. A entrada/saída permanece antes do primeiro bloco correspondente. Isso elimina novas chamadas ao escritor por comprimento, embora textos extensos ainda exijam mais síntese de voz. `short_line_words` e `short_line_chars` controlam a divisão.

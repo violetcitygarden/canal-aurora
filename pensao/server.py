@@ -150,7 +150,7 @@ def parse_dialogue(text, min_lines=6):
         if not match: continue
         speaker = match[1].upper().replace('É','E')
         line = match[2].strip().strip('*').strip()
-        if not line or len(line)>450 or line.startswith(('(', '[')): continue
+        if not line or line.startswith(('(', '[')): continue
         result.append((speaker,line))
     if not min_lines <= len(result) <= 20 or len({s for s,_ in result})<2:
         raise ValueError('Modelo não devolveu um diálogo utilizável com pelo menos dois personagens')
@@ -196,22 +196,24 @@ def reject_repetition(dialogue, history):
 
 
 def length_instruction(allow_long):
-    words = CONFIG.get('short_line_words',18)
-    chars = CONFIG.get('short_line_chars',110)
-    text = f'Prefira 5 a 12 palavras por fala, uma frase direta. Limite: {words} palavras e {chars} caracteres por fala. '
-    if allow_long:
-        text += f'Somente UMA fala deste trecho pode excepcionalmente chegar a {CONFIG.get("long_line_words",36)} palavras e {CONFIG.get("long_line_chars",210)} caracteres. '
-    return text
+    return 'Prefira uma frase direta de 5 a 12 palavras, sem explicações adicionais. '
 
 
-def validate_lengths(dialogue, allow_long=False):
-    long_count = 0
-    for _,text in dialogue:
-        if len(text.split()) <= CONFIG.get('short_line_words',18) and len(text) <= CONFIG.get('short_line_chars',110):
-            continue
-        long_count += 1
-        if not allow_long or long_count > 1 or len(text.split()) > CONFIG.get('long_line_words',36) or len(text) > CONFIG.get('long_line_chars',210):
-            raise ValueError('Fala longa demais. Reescreva com uma frase curta, sem explicações adicionais. ' + length_instruction(allow_long))
+def split_speech(text):
+    """Partition locally, preserving every word; never retry the writer for length."""
+    words = text.split()
+    chunks = []
+    current = []
+    for word in words:
+        if current and (len(current) >= CONFIG.get('short_line_words',18) or len(' '.join(current + [word])) > CONFIG.get('short_line_chars',110)):
+            chunks.append(' '.join(current))
+            current = []
+        current.append(word)
+        if len(current) >= 5 and re.search(r'[.!?;]?[.!?;]["”]*$',word):
+            chunks.append(' '.join(current))
+            current = []
+    if current: chunks.append(' '.join(current))
+    return chunks
 
 
 def generate_turns(present, topic, context, direction, history, allow_long=False):
@@ -232,12 +234,11 @@ def generate_turns(present, topic, context, direction, history, allow_long=False
                 'options':{'temperature':CONFIG['temperature'],'num_ctx':CONFIG['num_ctx'],'num_predict':160,'repeat_penalty':1.15}})
             text = re.sub(r'<think>.*?</think>', '', response.get('response',''), flags=re.S).strip()
             text = re.sub(r'^'+speaker+r'\s*:\s*', '', text, flags=re.I).strip(' "')
-            if not text or len(text)>450 or '\n' in text or re.search(r'(NAIR|VALDIR|J[ÉE]SSICA|MAURO)\s*:',text,re.I):
+            if not text or re.search(r'(NAIR|VALDIR|J[ÉE]SSICA|MAURO)\s*:',text,re.I):
                 if attempt == 1: raise ValueError(f'Resposta individual inválida de {speaker}; veja cache/generation-rejected.jsonl')
                 continue
             candidate = dialogue + [(speaker,text)]
             try:
-                validate_lengths(candidate,allow_long)
                 reject_repetition(candidate,history)
             except ValueError as error:
                 correction = str(error)
@@ -274,7 +275,6 @@ def generate_part(present, topic, context, direction, history=()):
             dialogue = parse_dialogue(response.get('response',''), min_lines=2)
             if any(s not in present for s,_ in dialogue):
                 raise ValueError('Só podem falar: ' + ', '.join(present))
-            validate_lengths(dialogue,allow_long)
             reject_repetition(dialogue, history)
             return dialogue
         except ValueError as error:
@@ -298,9 +298,16 @@ def generate_scene(present, event, after, topic, recent, history=()):
 
 
 def prepare_scene(dialogue, source, present=None, event=None, event_at=3):
+    expanded = []
+    for index,(speaker,text) in enumerate(dialogue):
+        chunks = split_speech(text)
+        for part,chunk in enumerate(chunks):
+            line = {'speaker':speaker,'text':chunk,'continuation':part>0,'continues':part<len(chunks)-1}
+            if event and index==event_at and part==0: line['event'] = event
+            expanded.append(line)
     def prepare(item):
-        speaker,text = item
-        line = {'speaker':speaker,'text':text}
+        line = dict(item)
+        speaker,text = line['speaker'],line['text']
         try:
             with VOICE_LOCKS[speaker]: line.update(speech(text,speaker))
         except Exception as error:
@@ -308,12 +315,11 @@ def prepare_scene(dialogue, source, present=None, event=None, event_at=3):
             line['voice_error'] = str(error)
             STATUS['error'] = f'Voz {speaker}: {error}'
         return line
-    futures = [POOL.submit(prepare,item) for item in dialogue]
+    futures = [POOL.submit(prepare,item) for item in expanded]
     lines = []
     for i,future in enumerate(futures):
-        STATUS['status'] = f'Preparando áudio {i+1}/{len(dialogue)}'
+        STATUS['status'] = f'Preparando áudio {i+1}/{len(expanded)}'
         lines.append(future.result())
-    if event: lines[event_at]['event'] = event
     return {'lines':lines,'source':source,'present':present or list(dict.fromkeys(s for s,_ in dialogue))}
 
 

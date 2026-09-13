@@ -246,10 +246,10 @@ func start_line() -> void:
 	active = line.speaker
 	actors[active].talking = true
 	captions.text = "%s: %s" % [active.capitalize(),line.text]
-	if line_index==0 or rng.randf()<0.4:
+	if not line.get("continuation",false) and (line_index==0 or rng.randf()<0.4):
 		camera_index = rng.randi_range(0,cameras.size()-1)
 		cameras[camera_index].current = true
-	if rng.randf() < 0.65:
+	if not line.get("continuation",false) and rng.randf() < 0.65:
 		shot_kind = rng.randi_range(0,2)
 		shot_front = actors[active].global_transform.basis.z.normalized()
 		shot_initializing = true
@@ -275,6 +275,10 @@ func should_laugh() -> bool:
 	return rng.randf()<clampf(float(config.get("laugh_probability",0.3)),0,1)
 func finish_line() -> void:
 	actors[active].talking = false
+	if lines[line_index].get("continues",false):
+		remaining = 0.12
+		state = "gap"
+		return
 	remaining = rng.randf_range(float(config.get("pause_min",0.5)),float(config.get("pause_max",1.7)))
 	if rng.randf()<float(config.get("awkward_probability",0.13)):
 		remaining += float(config.get("awkward_seconds",3.0))
